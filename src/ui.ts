@@ -5,8 +5,9 @@ export function renderDashboardHtml(): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lekh — Feature Memory Explorer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -48,14 +49,14 @@ export function renderDashboardHtml(): string {
   <header class="h-16 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur px-6 flex items-center justify-between shrink-0">
     <div class="flex items-center space-x-3">
       <div class="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-base">
-        L
+        🧠
       </div>
       <div>
         <div class="flex items-center space-x-2">
           <span class="font-bold text-zinc-100 tracking-tight text-base">Lekh</span>
-          <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60 font-mono">MCP Engine</span>
+          <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60 font-mono">MCP Memory</span>
         </div>
-        <p class="text-[11px] text-zinc-400">Zero-Hallucination Architectural Memory & Knowledge Explorer</p>
+        <p class="text-[11px] text-zinc-400">Persistent Architecture & Feature Knowledge Explorer</p>
       </div>
     </div>
 
@@ -69,12 +70,12 @@ export function renderDashboardHtml(): string {
 
     <!-- Actions (Refresh, Auto-refresh, Auth) -->
     <div class="flex items-center space-x-3">
-      <button onclick="refreshData(true)" id="refresh-btn" title="Refresh latest features from Cloudflare" class="text-xs px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition flex items-center space-x-1.5">
+      <button type="button" onclick="refreshData(true)" id="refresh-btn" title="Refresh latest features from Cloudflare" class="text-xs px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition flex items-center space-x-1.5">
         <svg id="refresh-icon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
         <span>Refresh</span>
       </button>
 
-      <button onclick="openAuthModal()" id="auth-status-btn" class="text-xs px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition flex items-center space-x-2">
+      <button type="button" onclick="openAuthModal()" id="auth-status-btn" class="text-xs px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition flex items-center space-x-2">
         <span id="auth-indicator" class="w-2 h-2 rounded-full bg-amber-400"></span>
         <span id="auth-btn-text">Connect Token</span>
       </button>
@@ -84,18 +85,18 @@ export function renderDashboardHtml(): string {
   <!-- View Navigation Tabs -->
   <div class="border-b border-zinc-800 bg-zinc-900/60 px-6 flex items-center justify-between text-sm font-medium">
     <div class="flex space-x-6">
-      <button onclick="switchView('projects')" id="tab-projects" class="py-3 border-b-2 border-emerald-500 text-emerald-400 transition flex items-center space-x-2">
+      <button type="button" onclick="switchView('projects')" id="tab-projects" class="py-3 border-b-2 border-emerald-500 text-emerald-400 transition flex items-center space-x-2">
         <span>📁 Projects</span>
         <span id="badge-projects-count" class="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300">0</span>
       </button>
-      <button onclick="switchView('features')" id="tab-features" class="py-3 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition flex items-center space-x-2">
+      <button type="button" onclick="switchView('features')" id="tab-features" class="py-3 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition flex items-center space-x-2">
         <span>📚 Features & Chunks</span>
         <span id="badge-features-count" class="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300">0</span>
       </button>
-      <button onclick="switchView('graph')" id="tab-graph" class="py-3 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition">
+      <button type="button" onclick="switchView('graph')" id="tab-graph" class="py-3 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition">
         <span>🌐 Knowledge Graph</span>
       </button>
-      <button onclick="switchView('search')" id="tab-search" class="py-3 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition">
+      <button type="button" onclick="switchView('search')" id="tab-search" class="py-3 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition">
         <span>⚡ Hybrid Search</span>
       </button>
     </div>
@@ -108,6 +109,23 @@ export function renderDashboardHtml(): string {
     </div>
   </div>
 
+  <!-- Global Connection Error Banner -->
+  <div id="connection-error-banner" class="hidden bg-red-950/70 border-b border-red-800/80 px-6 py-3">
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-red-200 text-xs">
+      <div class="flex items-center space-x-3">
+        <span class="text-xl">⚠️</span>
+        <div>
+          <div class="font-bold text-red-100" id="error-banner-title">Unable to connect to Lekh backend</div>
+          <div class="text-[11px] text-red-300 font-mono" id="error-banner-msg">Network error or invalid token.</div>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 shrink-0">
+        <button type="button" onclick="openAuthModal()" class="px-3 py-1.5 rounded-lg bg-red-900 hover:bg-red-800 text-white font-medium transition text-xs">🔑 Connect Token</button>
+        <button type="button" onclick="refreshData(true)" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition text-xs">🔄 Retry</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main Content Area -->
   <main class="flex-1 relative overflow-hidden">
     <!-- VIEW 1: Projects Overview (Default) -->
@@ -116,7 +134,7 @@ export function renderDashboardHtml(): string {
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
           <div>
             <h2 class="text-lg font-bold text-zinc-100">All Working Directories & Projects</h2>
-            <p class="text-xs text-zinc-400">Click any project card to view its documented features and architecture chunks.</p>
+            <p class="text-xs text-zinc-400">Click any project card below to view all its recorded features and architecture.</p>
           </div>
           <div id="projects-summary-tag" class="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-md">
             Showing <span id="projects-total-count" class="font-semibold text-zinc-200">0</span> active projects
@@ -139,7 +157,7 @@ export function renderDashboardHtml(): string {
             <span id="active-project-name" class="font-mono font-bold text-white px-2 py-0.5 rounded bg-indigo-900/80"></span>
             <span id="active-project-count" class="text-indigo-400"></span>
           </div>
-          <button onclick="clearProjectFilter()" class="text-[11px] underline hover:text-white transition">Show All Projects</button>
+          <button type="button" onclick="clearProjectFilter()" class="text-[11px] underline hover:text-white transition">Show All Projects</button>
         </div>
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -175,7 +193,7 @@ export function renderDashboardHtml(): string {
         <svg id="graph-svg" class="w-full h-full cursor-grab active:cursor-grabbing"></svg>
         <div class="absolute bottom-4 left-4 bg-zinc-900/90 border border-zinc-800 rounded-lg p-3 text-xs space-y-1.5 pointer-events-none backdrop-blur shadow-xl">
           <div class="font-semibold text-zinc-200 mb-1">Knowledge Graph Legend</div>
-          <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span><span>Project / Working Dir</span></div>
+          <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span><span>Project / CWD</span></div>
           <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span><span>Feature Component</span></div>
           <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-violet-500 inline-block"></span><span>Tag</span></div>
           <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span><span>File Path</span></div>
@@ -194,7 +212,7 @@ export function renderDashboardHtml(): string {
         <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-4 shadow-lg">
           <div class="flex flex-col sm:flex-row gap-3">
             <input type="text" id="search-input" onkeydown="if(event.key==='Enter') executeSearch()" placeholder="Type a concept, keyword, component name, or file path..." class="flex-1 bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500">
-            <button onclick="executeSearch()" class="px-5 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold text-white transition flex items-center justify-center space-x-1.5">
+            <button type="button" onclick="executeSearch()" class="px-5 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold text-white transition flex items-center justify-center space-x-1.5">
               <span>Search</span>
             </button>
           </div>
@@ -240,7 +258,7 @@ export function renderDashboardHtml(): string {
         <span id="drawer-type" class="text-xs px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 uppercase font-mono font-medium">feature</span>
         <span id="drawer-name" class="font-bold text-zinc-100 text-sm">Feature Name</span>
       </div>
-      <button onclick="closeDrawer()" class="p-2 text-zinc-400 hover:text-zinc-100 transition rounded-md hover:bg-zinc-800">
+      <button type="button" onclick="closeDrawer()" class="p-2 text-zinc-400 hover:text-zinc-100 transition rounded-md hover:bg-zinc-800">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
       </button>
     </div>
@@ -250,14 +268,14 @@ export function renderDashboardHtml(): string {
   </div>
 
   <!-- In-Page Token Modal -->
-  <div id="auth-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div id="auth-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-5">
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-2.5">
           <div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm">🔑</div>
           <h3 class="font-bold text-zinc-100 text-base">Connect to Lekh Engine</h3>
         </div>
-        <button onclick="closeAuthModal()" class="text-zinc-400 hover:text-zinc-200">
+        <button type="button" onclick="closeAuthModal()" class="text-zinc-400 hover:text-zinc-200">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
@@ -269,18 +287,18 @@ export function renderDashboardHtml(): string {
       <div class="space-y-1.5">
         <label class="text-[11px] font-medium text-zinc-300">Bearer Token</label>
         <div class="relative">
-          <input type="password" id="modal-token-input" placeholder="Paste your 64-char token here..." class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500 font-mono">
-          <button onclick="toggleTokenVisibility()" class="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300 text-xs">👁️</button>
+          <input type="password" id="modal-token-input" onkeydown="if(event.key==='Enter') saveModalToken()" placeholder="Paste your 64-char token here..." class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500 font-mono">
+          <button type="button" onclick="toggleTokenVisibility()" class="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300 text-xs">👁️</button>
         </div>
       </div>
 
       <div id="modal-auth-error" class="hidden text-xs text-red-400 bg-red-950/40 border border-red-900 rounded p-2.5"></div>
 
       <div class="flex items-center justify-between pt-2">
-        <button onclick="clearSavedToken()" class="text-xs text-zinc-500 hover:text-red-400 transition">Clear Saved Token</button>
+        <button type="button" onclick="clearSavedToken()" class="text-xs text-zinc-500 hover:text-red-400 transition">Clear Saved Token</button>
         <div class="flex items-center space-x-2">
-          <button onclick="closeAuthModal()" class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition">Cancel</button>
-          <button onclick="saveModalToken()" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">Save & Connect</button>
+          <button type="button" onclick="closeAuthModal()" class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition">Cancel</button>
+          <button type="button" onclick="saveModalToken()" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">Save & Connect</button>
         </div>
       </div>
     </div>
@@ -290,6 +308,23 @@ export function renderDashboardHtml(): string {
     let overviewData = { projects: [], features: [], stats: {}, graph: { nodes: [], links: [] } };
     let currentView = 'projects';
     let autoRefreshTimer = null;
+
+    // 0. Auto-extract token from URL query (?token=...) or hash (#token=...)
+    (function checkUrlToken() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+        const hashParams = new URLSearchParams(hash);
+        const paramToken = urlParams.get('token') || hashParams.get('token');
+        if (paramToken && paramToken.trim()) {
+          localStorage.setItem("lekh_token", paramToken.trim());
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      } catch (e) {
+        console.warn("Could not parse URL token", e);
+      }
+    })();
 
     function showToast(msg, icon = 'ℹ️') {
       const toast = document.getElementById('toast');
@@ -302,14 +337,17 @@ export function renderDashboardHtml(): string {
     }
 
     function getToken() {
-      return localStorage.getItem("lekh_token") || "";
+      return (localStorage.getItem("lekh_token") || "").trim();
     }
 
     function openAuthModal() {
       document.getElementById('modal-token-input').value = getToken();
       document.getElementById('modal-auth-error').classList.add('hidden');
       document.getElementById('auth-modal').classList.remove('hidden');
-      document.getElementById('modal-token-input').focus();
+      setTimeout(() => {
+        const input = document.getElementById('modal-token-input');
+        if (input) input.focus();
+      }, 50);
     }
 
     function closeAuthModal() {
@@ -319,6 +357,20 @@ export function renderDashboardHtml(): string {
     function toggleTokenVisibility() {
       const input = document.getElementById('modal-token-input');
       input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function showErrorBanner(title, msg) {
+      const b = document.getElementById('connection-error-banner');
+      if (b) {
+        document.getElementById('error-banner-title').textContent = title;
+        document.getElementById('error-banner-msg').textContent = msg;
+        b.classList.remove('hidden');
+      }
+    }
+
+    function hideErrorBanner() {
+      const b = document.getElementById('connection-error-banner');
+      if (b) b.classList.add('hidden');
     }
 
     async function saveModalToken() {
@@ -336,7 +388,7 @@ export function renderDashboardHtml(): string {
         closeAuthModal();
         showToast("Connected to Lekh successfully!", "✅");
       } catch (err) {
-        showModalError("Authentication failed: token rejected by server (401).");
+        showModalError(err.message || "Authentication failed: token rejected by server (401).");
         updateAuthUI(false);
       }
     }
@@ -347,6 +399,7 @@ export function renderDashboardHtml(): string {
       updateAuthUI(false);
       closeAuthModal();
       showToast("Token cleared", "🗑️");
+      showErrorBanner("Token Cleared", "Please connect your Bearer token to inspect features.");
     }
 
     function showModalError(msg) {
@@ -398,21 +451,34 @@ export function renderDashboardHtml(): string {
       const token = getToken();
       if (!token) {
         openAuthModal();
-        throw new Error("Missing token");
+        throw new Error("Missing Bearer token. Please click Connect Token.");
       }
 
       const headers = {
         'Authorization': 'Bearer ' + token,
+        'Accept': 'application/json',
         ...(options.headers || {})
       };
 
-      const res = await fetch(endpoint, { ...options, headers });
+      let res;
+      try {
+        res = await fetch(endpoint, { ...options, headers });
+      } catch (netErr) {
+        throw new Error("Network error (" + (netErr.name || 'FetchFailed') + "): " + (netErr.message || "Connection was blocked or aborted by the browser."));
+      }
+
       if (res.status === 401) {
         updateAuthUI(false);
         openAuthModal();
         showModalError("401 Unauthorized: Invalid Bearer token.");
-        throw new Error("Unauthorized");
+        throw new Error("401 Unauthorized: Invalid Bearer token");
       }
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error("HTTP " + res.status + ": " + (errText || res.statusText));
+      }
+
       return res.json();
     }
 
@@ -423,6 +489,7 @@ export function renderDashboardHtml(): string {
       try {
         overviewData = await apiFetch('/api/overview');
         updateAuthUI(true);
+        hideErrorBanner();
 
         // Update stats
         document.getElementById('stat-projects').textContent = overviewData.stats.total_projects || 0;
@@ -454,6 +521,9 @@ export function renderDashboardHtml(): string {
         if (showFeedback) showToast("Features & Knowledge Graph synced!", "🔄");
       } catch (err) {
         console.error("Refresh error:", err);
+        updateAuthUI(false);
+        showErrorBanner("Connection Error", err.message || "Failed to load features. Please check your Bearer token.");
+        throw err;
       } finally {
         if (icon) icon.classList.remove('spinning');
       }
@@ -465,7 +535,9 @@ export function renderDashboardHtml(): string {
         autoRefreshTimer = null;
       }
       if (enabled) {
-        autoRefreshTimer = setInterval(() => refreshData(false), 15000);
+        autoRefreshTimer = setInterval(() => {
+          refreshData(false).catch(() => {});
+        }, 15000);
         showToast("Auto-refresh enabled (15s)", "⏱️");
       } else {
         showToast("Auto-refresh paused", "⏸️");
@@ -484,7 +556,7 @@ export function renderDashboardHtml(): string {
             <div class="text-3xl">📁</div>
             <div class="font-semibold text-zinc-300">No projects recorded yet</div>
             <p class="text-xs max-w-md mx-auto text-zinc-500">
-              When an agent in Antigravity or OpenCode runs an implementation and calls \`save_feature\`, the working directory project will appear here automatically.
+              When an agent in Antigravity or OpenCode runs an implementation and calls save_feature, the working directory project will appear here automatically.
             </p>
           </div>
         \`;
@@ -504,39 +576,41 @@ export function renderDashboardHtml(): string {
           }">\${t}</span>
         \`).join(' ');
 
-        const tagsBadges = (p.tags || []).slice(0, 5).map(t => \`
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">#\${t}</span>
+        const tagsList = (p.tags || []).slice(0, 6).map(tg => \`
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800/70 text-zinc-400 font-mono">#\${tg}</span>
         \`).join(' ');
 
         card.innerHTML = \`
           <div class="space-y-3">
-            <div class="flex items-center justify-between">
+            <div class="flex items-start justify-between">
               <div class="flex items-center space-x-2.5">
-                <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-mono font-bold text-xs">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm">
                   📁
                 </div>
                 <div>
-                  <h3 class="text-base font-bold text-zinc-100 group-hover:text-emerald-400 transition font-mono">\${p.project}</h3>
-                  <div class="text-[11px] text-zinc-500">Last updated: \${p.last_updated}</div>
+                  <h3 class="font-bold text-base text-zinc-100 group-hover:text-emerald-400 transition tracking-tight font-mono">\${p.project}</h3>
+                  <div class="text-[11px] text-zinc-500">Last updated: \${p.last_updated || 'recently'}</div>
                 </div>
               </div>
+              <span class="text-xs font-mono font-semibold px-2 py-1 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
+                \${p.feature_count} \${p.feature_count === 1 ? 'Feature' : 'Features'}
+              </span>
             </div>
 
-            <div class="flex items-center space-x-4 py-2 border-y border-zinc-800/80 text-xs">
-              <div>
-                <span class="font-bold text-zinc-100 text-sm">\${p.feature_count}</span>
-                <span class="text-zinc-500 text-[11px] ml-1">\${p.feature_count === 1 ? 'Feature' : 'Features'}</span>
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-800/80 text-xs">
+              <div class="bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800/50">
+                <div class="text-zinc-500 text-[10px] uppercase font-mono">Dense Chunks</div>
+                <div class="font-semibold text-zinc-200 mt-0.5">\${p.total_chunks} vectors</div>
               </div>
-              <div class="h-3 w-px bg-zinc-800"></div>
-              <div>
-                <span class="font-bold text-emerald-400 text-sm">\${p.total_chunks}</span>
-                <span class="text-zinc-500 text-[11px] ml-1">Vector Chunks</span>
+              <div class="bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800/50">
+                <div class="text-zinc-500 text-[10px] uppercase font-mono">Component Types</div>
+                <div class="flex flex-wrap gap-1 mt-1">\${typesBadges}</div>
               </div>
             </div>
 
-            <div class="space-y-2">
-              <div class="flex flex-wrap gap-1">\${typesBadges}</div>
-              <div class="flex flex-wrap gap-1 pt-1">\${tagsBadges}</div>
+            <div class="space-y-1">
+              <div class="text-[10px] uppercase font-mono text-zinc-500">Key Tags</div>
+              <div class="flex flex-wrap gap-1">\${tagsList}</div>
             </div>
           </div>
 
@@ -555,7 +629,7 @@ export function renderDashboardHtml(): string {
 
       const pObj = (overviewData.projects || []).find(p => p.project === project);
       const count = pObj ? pObj.feature_count : 0;
-      document.getElementById('active-project-count').textContent = \`(\${count} \${count === 1 ? 'feature' : 'features'})\`;
+      document.getElementById('active-project-count').textContent = '(' + count + ' ' + (count === 1 ? 'feature' : 'features') + ')';
 
       banner.classList.remove('hidden');
       document.getElementById('feat-filter-project').value = project;
@@ -588,7 +662,7 @@ export function renderDashboardHtml(): string {
           <div class="col-span-2 text-zinc-500 py-16 text-center border border-zinc-800 rounded-xl bg-zinc-950/40 p-8 space-y-2">
             <div class="text-2xl">🔍</div>
             <div class="font-medium text-zinc-300">No features matched the selected filters</div>
-            <button onclick="clearProjectFilter()" class="text-xs text-emerald-400 underline">Reset all filters</button>
+            <button type="button" onclick="clearProjectFilter()" class="text-xs text-emerald-400 underline">Reset all filters</button>
           </div>
         \`;
         return;
@@ -599,8 +673,8 @@ export function renderDashboardHtml(): string {
         card.className = "bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl p-5 space-y-3 transition cursor-pointer shadow-md";
         card.onclick = () => openDrawer(f.project, f.name);
 
-        const tagsHtml = (f.tags || []).map(t => \`<span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-mono">#\${t}</span>\`).join(' ');
-        const filesHtml = (f.files || []).slice(0, 3).map(file => \`<div class="text-[11px] text-zinc-400 font-mono truncate">📄 \${file}</div>\`).join('');
+        const tagsHtml = (f.tags || []).map(t => '<span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-mono">#' + t + '</span>').join(' ');
+        const filesHtml = (f.files || []).slice(0, 3).map(file => '<div class="text-[11px] text-zinc-400 font-mono truncate">📄 ' + file + '</div>').join('');
 
         card.innerHTML = \`
           <div class="flex items-center justify-between">
@@ -626,9 +700,15 @@ export function renderDashboardHtml(): string {
     // --- Render D3 Knowledge Graph View ---
     function renderGraph() {
       const container = document.getElementById('graph-container');
+      if (!container) return;
       const width = container.clientWidth;
       const height = container.clientHeight;
       if (!width || !height) return;
+
+      if (typeof d3 === 'undefined') {
+        console.warn("D3 library not loaded yet");
+        return;
+      }
 
       d3.select("#graph-svg").selectAll("*").remove();
       const svg = d3.select("#graph-svg")
@@ -658,7 +738,7 @@ export function renderDashboardHtml(): string {
         .attr("class", "link");
 
       const node = g.append("g")
-        .selectAll(".node")
+        .selectAll("g")
         .data(nodes)
         .join("g")
         .attr("class", "node cursor-pointer")
@@ -678,27 +758,27 @@ export function renderDashboardHtml(): string {
             d.fy = null;
           }))
         .on("click", (event, d) => {
-          if (d.type === 'project' || d.id.startsWith('proj:')) {
-            selectProjectAndShowFeatures(d.name);
-          } else if (d.type === 'feature' || d.id.startsWith('feat:')) {
+          if (d.type === 'feature') {
             openDrawer(d.project, d.name);
+          } else if (d.type === 'project') {
+            selectProjectAndShowFeatures(d.name);
           }
         });
 
       node.append("circle")
-        .attr("r", d => d.type === 'project' ? 16 : (d.type === 'feature' ? 10 : 6))
+        .attr("r", d => d.type === 'project' ? 14 : d.type === 'feature' ? 10 : d.type === 'tag' ? 6 : 5)
         .attr("fill", d => {
           if (d.type === 'project') return '#6366f1';
           if (d.type === 'feature') return '#10b981';
-          if (d.type === 'tag') return '#8b5cf6';
+          if (d.type === 'tag') return '#a855f7';
           return '#f59e0b';
         })
         .attr("stroke", "#18181b")
         .attr("stroke-width", 2);
 
       node.append("text")
-        .attr("x", 14)
-        .attr("y", 4)
+        .attr("x", 12)
+        .attr("y", 3)
         .text(d => d.name);
 
       simulation.on("tick", () => {
@@ -713,38 +793,48 @@ export function renderDashboardHtml(): string {
       });
     }
 
-    // --- Open Feature Drawer ---
+    // --- Feature Detail Drawer ---
     async function openDrawer(project, name) {
       const drawer = document.getElementById('feature-drawer');
       const body = document.getElementById('drawer-body');
+      document.getElementById('drawer-name').textContent = name;
+      body.innerHTML = '<div class="py-12 text-center text-zinc-500 text-xs">Loading feature chunks and vectors...</div>';
       drawer.classList.remove('translate-x-full');
-
-      body.innerHTML = '<div class="py-16 text-center text-zinc-500 text-xs">Loading feature details & chunks from D1 & Vectorize...</div>';
 
       try {
         const feat = await apiFetch('/api/feature?project=' + encodeURIComponent(project) + '&name=' + encodeURIComponent(name));
-        document.getElementById('drawer-name').textContent = feat.project + ' / ' + feat.name;
         document.getElementById('drawer-type').textContent = feat.type;
 
-        let sectionsHtml = (feat.sections || []).map(s => \`
-          <div class="bg-zinc-950/70 border border-zinc-800 rounded-lg p-3.5 space-y-1.5">
-            <div class="font-bold text-zinc-200 text-xs uppercase tracking-wider text-emerald-400">\${s.title}</div>
-            <div class="whitespace-pre-wrap text-zinc-300 leading-relaxed font-sans text-xs">\${s.content}</div>
+        const tagsHtml = (feat.tags || []).map(t => '<span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] font-mono">#' + t + '</span>').join(' ');
+
+        const sectionsHtml = (feat.sections || []).map(s => \`
+          <div class="bg-zinc-950 p-4 rounded-lg border border-zinc-800 space-y-1.5">
+            <h4 class="font-bold text-zinc-200 text-xs font-mono uppercase text-emerald-400">§ \${s.title}</h4>
+            <div class="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed">\${s.content}</div>
           </div>
         \`).join('');
 
-        let chunksHtml = (feat.chunks || []).map(c => \`
-          <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-1.5">
-            <div class="flex items-center justify-between font-mono text-[11px]">
-              <span class="text-emerald-400 font-bold">[\${c.vector_id}]</span>
-              <span class="text-zinc-500">idx: \${c.idx} • \${c.section}</span>
+        const chunksHtml = (feat.chunks || []).map(c => \`
+          <div class="bg-zinc-950/70 p-3 rounded-lg border border-zinc-800/80 space-y-1 text-[11px] font-mono">
+            <div class="flex items-center justify-between text-zinc-500">
+              <span>Chunk \${c.idx} [section: \${c.section}]</span>
+              <span class="text-indigo-400">\${c.vector_id}</span>
             </div>
-            <pre class="text-[11px] text-zinc-400 font-mono whitespace-pre-wrap leading-tight bg-zinc-900/70 p-2.5 rounded border border-zinc-800/80">\${c.text}</pre>
+            <div class="text-zinc-300 whitespace-pre-wrap text-[11px] pt-1 border-t border-zinc-900">\${c.text}</div>
           </div>
         \`).join('');
 
         body.innerHTML = \`
           <div class="space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div class="flex items-center space-x-2">
+                <span class="font-mono text-xs text-indigo-400 font-semibold">📁 \${feat.project}</span>
+                <span class="text-zinc-600">/</span>
+                <span class="font-bold text-zinc-100 text-sm">\${feat.name}</span>
+              </div>
+              <div class="flex items-center space-x-1.5">\${tagsHtml}</div>
+            </div>
+
             <div>
               <div class="text-[11px] uppercase font-mono text-zinc-500 mb-1 font-semibold">Summary</div>
               <p class="text-xs text-zinc-200 leading-relaxed bg-zinc-950 p-3.5 rounded-lg border border-zinc-800">\${feat.summary}</p>
@@ -843,10 +933,11 @@ export function renderDashboardHtml(): string {
     const initialToken = getToken();
     if (initialToken) {
       updateAuthUI(true);
-      refreshData(false);
+      refreshData(false).catch(() => {});
     } else {
       updateAuthUI(false);
       openAuthModal();
+      showErrorBanner("Token Required", "Please enter your Bearer token above to connect to Lekh memory.");
     }
   </script>
 </body>

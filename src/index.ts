@@ -4,6 +4,33 @@ import { createServer } from "./mcp";
 import { renderDashboardHtml } from "./ui";
 import { getOverviewGraph, getFeature, searchFeatures } from "./store";
 
+const corsHeaders: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+};
+
+function json(data: any, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...corsHeaders,
+    },
+  });
+}
+
+function unauthorized(message = "Unauthorized: Invalid or missing Bearer token"): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status: 401,
+    headers: {
+      "Content-Type": "application/json",
+      "WWW-Authenticate": "Bearer",
+      ...corsHeaders,
+    },
+  });
+}
+
 export default {
   async fetch(
     request: Request,
@@ -12,62 +39,67 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
 
-    // 1. Health check
-    if (url.pathname === "/health") {
-      return Response.json({ status: "ok" });
+    // 0. Handle CORS Preflight for all routes
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders,
+      });
     }
 
-    // 2. Visual Dashboard
-    if (url.pathname === "/" && request.method === "GET") {
+    // 1. Health check
+    if (url.pathname === "/health") {
+      return json({ status: "ok" });
+    }
+
+    // 2. Favicon handler (avoids 404 aborts in browsers)
+    if (url.pathname === "/favicon.ico") {
+      return new Response(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🧠</text></svg>`,
+        {
+          headers: {
+            "Content-Type": "image/svg+xml",
+            "Cache-Control": "public, max-age=86400",
+            ...corsHeaders,
+          },
+        }
+      );
+    }
+
+    // 3. Visual Dashboard
+    if (url.pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
       return new Response(renderDashboardHtml(), {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
+          ...corsHeaders,
         },
       });
     }
 
-    // 3. MCP Endpoint
+    // 4. MCP Endpoint
     if (url.pathname === "/mcp") {
       const isAuthed = await checkBearer(request, env.MCP_AUTH_TOKEN);
       if (!isAuthed) {
-        return new Response(
-          JSON.stringify({ error: "Unauthorized: Invalid or missing Bearer token" }),
-          {
-            status: 401,
-            headers: {
-              "Content-Type": "application/json",
-              "WWW-Authenticate": "Bearer",
-            },
-          }
-        );
+        return unauthorized();
       }
 
       const mcpHandler = createMcpHandler(() => createServer(env));
       return mcpHandler(request, env, ctx);
     }
 
-    // 4. Authenticated JSON API for Dashboard
+    // 5. Authenticated JSON API for Dashboard
     if (url.pathname.startsWith("/api/")) {
       const isAuthed = await checkBearer(request, env.MCP_AUTH_TOKEN);
       if (!isAuthed) {
-        return new Response(
-          JSON.stringify({ error: "Unauthorized: Invalid or missing Bearer token" }),
-          {
-            status: 401,
-            headers: {
-              "Content-Type": "application/json",
-              "WWW-Authenticate": "Bearer",
-            },
-          }
-        );
+        return unauthorized();
       }
 
-      if (url.pathname === "/api/overview" && request.method === "GET") {
+      if (url.pathname === "/api/overview" && (request.method === "GET" || request.method === "HEAD")) {
         try {
           const overview = await getOverviewGraph(env);
-          return Response.json(overview);
+          return json(overview);
         } catch (err: any) {
-          return Response.json({ error: err.message || String(err) }, { status: 500 });
+          return json({ error: err.message || String(err) }, 500);
         }
       }
 
@@ -75,23 +107,23 @@ export default {
         const project = url.searchParams.get("project");
         const name = url.searchParams.get("name");
         if (!project || !name) {
-          return Response.json(
+          return json(
             { error: "Missing required query parameters: 'project' and 'name'" },
-            { status: 400 }
+            400
           );
         }
 
         try {
           const feat = await getFeature(env, project, name);
           if (!feat) {
-            return Response.json(
+            return json(
               { error: `Feature '${name}' in project '${project}' not found` },
-              { status: 404 }
+              404
             );
           }
-          return Response.json(feat);
+          return json(feat);
         } catch (err: any) {
-          return Response.json({ error: err.message || String(err) }, { status: 500 });
+          return json({ error: err.message || String(err) }, 500);
         }
       }
 
@@ -99,9 +131,9 @@ export default {
         try {
           const body = (await request.json()) as any;
           if (!body || typeof body.query !== "string") {
-            return Response.json(
+            return json(
               { error: "Invalid search payload: 'query' string is required" },
-              { status: 400 }
+              400
             );
           }
           const results = await searchFeatures(env, {
@@ -111,15 +143,15 @@ export default {
             library: body.library,
             limit: body.limit,
           });
-          return Response.json(results);
+          return json(results);
         } catch (err: any) {
-          return Response.json({ error: err.message || String(err) }, { status: 500 });
+          return json({ error: err.message || String(err) }, 500);
         }
       }
 
-      return Response.json({ error: "API route not found" }, { status: 404 });
+      return json({ error: "API route not found" }, 404);
     }
 
-    return new Response("Not found", { status: 404 });
+    return new Response("Not found", { status: 404, headers: corsHeaders });
   },
 };
