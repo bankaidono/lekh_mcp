@@ -84,6 +84,11 @@ export function renderDashboardHtml(): string {
 
     <!-- Actions (Refresh, Auth) -->
     <div class="flex items-center space-x-2 shrink-0">
+      <button type="button" onclick="openCreateFeatureModal()" title="Create feature" class="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-medium transition flex items-center space-x-1.5 text-xs shadow-md">
+        <span class="text-sm font-bold leading-none">+</span>
+        <span class="hidden sm:inline">New Feature</span>
+      </button>
+
       <button type="button" onclick="refreshData(true)" id="refresh-btn" title="Refresh latest features" class="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 border border-zinc-700 transition flex items-center space-x-1.5 text-xs">
         <svg id="refresh-icon" class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
         <span class="hidden sm:inline">Refresh</span>
@@ -154,8 +159,16 @@ export function renderDashboardHtml(): string {
             <h2 class="text-base sm:text-lg font-bold text-zinc-100">All Working Directories & Projects</h2>
             <p class="text-xs text-zinc-400">Click any project card to explore features or click 🗑️ to delete.</p>
           </div>
-          <div id="projects-summary-tag" class="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-md self-start sm:self-auto">
-            Showing <span id="projects-total-count" class="font-semibold text-zinc-200">0</span> active projects
+          <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <button type="button" onclick="exportFeaturesJson()" title="Download entire memory bank as JSON backup" class="min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 border border-zinc-800 hover:border-zinc-700 text-xs transition flex items-center space-x-1.5 shadow-sm">
+              <span>⬇️</span><span>Export JSON</span>
+            </button>
+            <button type="button" onclick="triggerImportJson()" title="Import feature memory JSON bundle" class="min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 border border-zinc-800 hover:border-zinc-700 text-xs transition flex items-center space-x-1.5 shadow-sm">
+              <span>⬆️</span><span>Import JSON</span>
+            </button>
+            <div id="projects-summary-tag" class="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-md">
+              Showing <span id="projects-total-count" class="font-semibold text-zinc-200">0</span> active projects
+            </div>
           </div>
         </div>
 
@@ -185,6 +198,9 @@ export function renderDashboardHtml(): string {
           </div>
 
           <div class="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+            <button type="button" onclick="openCreateFeatureModal()" class="col-span-2 sm:col-span-1 min-h-[40px] px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-medium transition flex items-center justify-center space-x-1.5 text-xs shadow-md">
+              <span class="font-bold">+</span><span>New Feature</span>
+            </button>
             <select id="feat-filter-project" onchange="renderFeaturesList()" class="bg-zinc-800 border border-zinc-700 text-base sm:text-xs min-h-[40px] rounded-lg px-2.5 py-1.5 text-zinc-200 focus:outline-none focus:border-emerald-500 w-full">
               <option value="">All Projects</option>
             </select>
@@ -270,6 +286,12 @@ export function renderDashboardHtml(): string {
                 <option value="20">20</option>
               </select>
             </div>
+            <div class="flex items-center space-x-1.5 col-span-2 sm:col-span-1 sm:pl-2">
+              <label class="flex items-center space-x-1.5 cursor-pointer text-xs text-zinc-300">
+                <input type="checkbox" id="search-rerank" checked class="rounded bg-zinc-950 border-zinc-700 text-emerald-500 focus:ring-0">
+                <span title="Stage-3 Cross-Encoder Reranker (@cf/baai/bge-reranker-base)">🎯 Reranker</span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -287,9 +309,17 @@ export function renderDashboardHtml(): string {
             <h2 class="text-base sm:text-lg font-bold text-zinc-100">Live Compute & Resource Stats</h2>
             <p class="text-xs text-zinc-400">Real-time stats from Workers AI Neurons, Cloudflare D1, and Vectorize V2.</p>
           </div>
-          <button type="button" onclick="loadStatsView(true)" class="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:bg-zinc-800 active:bg-zinc-700 transition flex items-center space-x-1.5">
-            <span>🔄 Refresh Stats</span>
-          </button>
+          <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <button type="button" onclick="exportFeaturesJson()" title="Download entire memory bank as JSON backup" class="min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 border border-zinc-800 hover:border-zinc-700 text-xs transition flex items-center space-x-1.5 shadow-sm">
+              <span>⬇️</span><span>Export JSON</span>
+            </button>
+            <button type="button" onclick="triggerImportJson()" title="Import feature memory JSON bundle" class="min-h-[34px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 border border-zinc-800 hover:border-zinc-700 text-xs transition flex items-center space-x-1.5 shadow-sm">
+              <span>⬆️</span><span>Import JSON</span>
+            </button>
+            <button type="button" onclick="loadStatsView(true)" class="min-h-[34px] px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:bg-zinc-800 active:bg-zinc-700 transition flex items-center space-x-1.5 shadow-sm">
+              <span>🔄 Refresh Stats</span>
+            </button>
+          </div>
         </div>
 
         <div id="stats-content-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
@@ -306,9 +336,14 @@ export function renderDashboardHtml(): string {
         <span id="drawer-type" class="text-[10px] sm:text-xs px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 uppercase font-mono font-medium shrink-0">feature</span>
         <span id="drawer-name" class="font-bold text-zinc-100 text-xs sm:text-sm truncate">Feature Name</span>
       </div>
-      <button type="button" onclick="closeDrawer()" title="Close drawer" class="min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 p-2 rounded-lg text-zinc-400 hover:text-zinc-100 active:bg-zinc-800 transition">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-      </button>
+      <div class="flex items-center space-x-1.5 -mr-2">
+        <button type="button" onclick="editCurrentDrawerFeature()" title="Edit this feature" class="min-h-[34px] px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-200 transition text-xs flex items-center space-x-1">
+          <span>✏️</span><span class="hidden sm:inline">Edit</span>
+        </button>
+        <button type="button" onclick="closeDrawer()" title="Close drawer" class="min-w-[40px] min-h-[40px] flex items-center justify-center p-2 rounded-lg text-zinc-400 hover:text-zinc-100 active:bg-zinc-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
     </div>
     <div id="drawer-body" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 scrollbar-thin text-xs text-zinc-300 pb-20">
       <!-- Populated via openDrawer -->
@@ -382,6 +417,99 @@ export function renderDashboardHtml(): string {
     </div>
   </div>
 
+  <!-- Create / Edit Feature Modal -->
+  <div id="feature-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-3 sm:p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-3 shrink-0">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm">📝</div>
+          <h3 class="font-bold text-zinc-100 text-sm sm:text-base" id="modal-feat-title">Create New Feature</h3>
+        </div>
+        <button type="button" onclick="closeFeatureModal()" class="min-w-[40px] min-h-[40px] flex items-center justify-center text-zinc-400 hover:text-zinc-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[11px] font-medium text-zinc-300">Project / Working Directory *</label>
+            <input type="text" id="modal-feat-project" placeholder="e.g. lekh" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-medium text-zinc-300">Feature Slug *</label>
+            <input type="text" id="modal-feat-name" placeholder="e.g. jwt-auth-middleware" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="space-y-1">
+            <label class="text-[11px] font-medium text-zinc-300">Type</label>
+            <select id="modal-feat-type" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">
+              <option value="feature">feature</option>
+              <option value="pattern">pattern</option>
+              <option value="decision">decision</option>
+              <option value="fix">fix</option>
+              <option value="refactor">refactor</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-medium text-zinc-300">Importance</label>
+            <select id="modal-feat-importance" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">
+              <option value="1">1 (Minor / Isolated)</option>
+              <option value="2" selected>2 (Standard Feature)</option>
+              <option value="3">3 (Critical Architecture)</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-medium text-zinc-300">Library (Optional)</label>
+            <input type="text" id="modal-feat-library" placeholder="e.g. zod, d1" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500">
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-[11px] font-medium text-zinc-300">Summary * (2-4 sentences)</label>
+          <textarea id="modal-feat-summary" rows="2" placeholder="Explain what it does, why it exists, and how to use it..." class="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500 leading-relaxed"></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[11px] font-medium text-zinc-300">Touched Files (comma or newline separated)</label>
+            <textarea id="modal-feat-files" rows="2" placeholder="src/store.ts, src/mcp.ts" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"></textarea>
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-medium text-zinc-300">Tags (comma separated)</label>
+            <textarea id="modal-feat-tags" rows="2" placeholder="auth, security, d1" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"></textarea>
+          </div>
+        </div>
+
+        <div class="space-y-2 pt-2 border-t border-zinc-800">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-bold uppercase font-mono text-zinc-300">Documentation Sections *</label>
+            <button type="button" onclick="addModalSectionRow()" class="text-xs text-emerald-400 hover:text-emerald-300 transition flex items-center space-x-1 py-1">
+              <span>+ Add Section</span>
+            </button>
+          </div>
+          <div id="modal-feat-sections" class="space-y-2.5">
+            <!-- Dynamic section rows -->
+          </div>
+        </div>
+
+        <div id="modal-feat-error" class="hidden text-xs text-red-400 bg-red-950/40 border border-red-900 rounded-lg p-2.5"></div>
+      </div>
+
+      <div class="flex items-center justify-between pt-3 border-t border-zinc-800 shrink-0">
+        <button type="button" onclick="closeFeatureModal()" class="min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 active:bg-zinc-700 transition">Cancel</button>
+        <button type="button" id="modal-feat-save-btn" onclick="saveFeatureFromModal()" class="min-h-[40px] px-5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white transition flex items-center space-x-1.5 shadow-md">
+          <span>Save Feature</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden File Input for JSON Backup Import -->
+  <input type="file" id="import-json-file-input" accept=".json" onchange="handleImportJsonFile(event)" class="hidden">
+
   <script>
     let overviewData = { projects: [], features: [], stats: {}, graph: { nodes: [], links: [] } };
     let currentView = 'projects';
@@ -390,6 +518,196 @@ export function renderDashboardHtml(): string {
     let currentZoom = null;
     let pendingDelete = null; // { type: 'project' | 'feature', project: string, name?: string }
     let currentDrawerFeature = null; // { project: string, name: string }
+    let lastLoadedDrawerFeature = null;
+    let currentEditingFeature = null;
+
+    // --- Create / Edit Feature Modal Functions ---
+    function openCreateFeatureModal() {
+      currentEditingFeature = null;
+      document.getElementById('modal-feat-title').textContent = 'Create New Feature';
+      document.getElementById('modal-feat-project').value = '';
+      document.getElementById('modal-feat-project').disabled = false;
+      document.getElementById('modal-feat-name').value = '';
+      document.getElementById('modal-feat-name').disabled = false;
+      document.getElementById('modal-feat-type').value = 'feature';
+      document.getElementById('modal-feat-importance').value = '2';
+      document.getElementById('modal-feat-library').value = '';
+      document.getElementById('modal-feat-summary').value = '';
+      document.getElementById('modal-feat-files').value = '';
+      document.getElementById('modal-feat-tags').value = '';
+      document.getElementById('modal-feat-error').classList.add('hidden');
+
+      const sectionsContainer = document.getElementById('modal-feat-sections');
+      sectionsContainer.innerHTML = '';
+      addModalSectionRow('overview', '');
+      addModalSectionRow('architecture', '');
+      addModalSectionRow('gotchas', '');
+
+      document.getElementById('feature-modal').classList.remove('hidden');
+    }
+
+    function openEditFeatureModal(feat) {
+      currentEditingFeature = feat;
+      document.getElementById('modal-feat-title').textContent = 'Edit Feature: ' + feat.name;
+      document.getElementById('modal-feat-project').value = feat.project;
+      document.getElementById('modal-feat-project').disabled = true;
+      document.getElementById('modal-feat-name').value = feat.name;
+      document.getElementById('modal-feat-name').disabled = true;
+      document.getElementById('modal-feat-type').value = feat.type || 'feature';
+      document.getElementById('modal-feat-importance').value = String(feat.importance || 2);
+      document.getElementById('modal-feat-library').value = feat.library || '';
+      document.getElementById('modal-feat-summary').value = feat.summary || '';
+      document.getElementById('modal-feat-files').value = (feat.files || []).join('\\n');
+      document.getElementById('modal-feat-tags').value = (feat.tags || []).join(', ');
+      document.getElementById('modal-feat-error').classList.add('hidden');
+
+      const sectionsContainer = document.getElementById('modal-feat-sections');
+      sectionsContainer.innerHTML = '';
+      if (feat.sections && feat.sections.length > 0) {
+        feat.sections.forEach(s => addModalSectionRow(s.title, s.content));
+      } else {
+        addModalSectionRow('overview', '');
+      }
+
+      document.getElementById('feature-modal').classList.remove('hidden');
+    }
+
+    function closeFeatureModal() {
+      document.getElementById('feature-modal').classList.add('hidden');
+    }
+
+    function addModalSectionRow(title = '', content = '') {
+      const container = document.getElementById('modal-feat-sections');
+      const div = document.createElement('div');
+      div.className = 'section-row bg-zinc-950 p-3 rounded-xl border border-zinc-800 space-y-2';
+      div.innerHTML = \`
+        <div class="flex items-center justify-between gap-2">
+          <input type="text" placeholder="Section Title (e.g. overview, gotchas)" value="\${title.replace(/"/g, '&quot;')}" class="sec-title-input flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500">
+          <button type="button" onclick="this.closest('.section-row').remove()" class="text-zinc-500 hover:text-red-400 p-1 text-xs">✕</button>
+        </div>
+        <textarea rows="3" placeholder="Detailed section markdown content..." class="sec-content-input w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">\${content}</textarea>
+      \`;
+      container.appendChild(div);
+    }
+
+    async function saveFeatureFromModal() {
+      const errBox = document.getElementById('modal-feat-error');
+      errBox.classList.add('hidden');
+
+      const project = document.getElementById('modal-feat-project').value.trim();
+      const name = document.getElementById('modal-feat-name').value.trim();
+      const type = document.getElementById('modal-feat-type').value;
+      const importance = parseInt(document.getElementById('modal-feat-importance').value, 10) || 2;
+      const library = document.getElementById('modal-feat-library').value.trim() || undefined;
+      const summary = document.getElementById('modal-feat-summary').value.trim();
+
+      const rawFiles = document.getElementById('modal-feat-files').value;
+      const files = rawFiles.split(/[\\n,]+/).map(f => f.trim()).filter(Boolean);
+
+      const rawTags = document.getElementById('modal-feat-tags').value;
+      const tags = rawTags.split(/[\\n,]+/).map(t => t.trim()).filter(Boolean);
+
+      if (!project || !name || !summary) {
+        errBox.textContent = 'Project, Name, and Summary are required fields.';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      const sectionRows = document.querySelectorAll('#modal-feat-sections .section-row');
+      const sections = [];
+      sectionRows.forEach(row => {
+        const sTitle = row.querySelector('.sec-title-input').value.trim();
+        const sContent = row.querySelector('.sec-content-input').value.trim();
+        if (sTitle && sContent) {
+          sections.push({ title: sTitle, content: sContent });
+        }
+      });
+
+      if (sections.length === 0) {
+        errBox.textContent = 'At least one section with non-empty title and content is required.';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      const btn = document.getElementById('modal-feat-save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const payload = { project, name, type, importance, library, summary, sections, files, tags };
+        await apiFetch('/api/feature', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        closeFeatureModal();
+        showToast("Feature '" + name + "' saved successfully!", '✅');
+        await refreshData(true);
+        if (currentDrawerFeature && currentDrawerFeature.project === project && currentDrawerFeature.name === name) {
+          openDrawer(project, name);
+        }
+      } catch (err) {
+        errBox.textContent = 'Save failed: ' + (err.message || String(err));
+        errBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Feature';
+      }
+    }
+
+    // --- 1-Click JSON Backup Export & Import ---
+    async function exportFeaturesJson() {
+      try {
+        showToast("Generating memory backup bundle...", "⬇️");
+        const bundle = await apiFetch('/api/export');
+        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'lekh-memory-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("Exported " + (bundle.features?.length || 0) + " features!", "✅");
+      } catch (err) {
+        showToast("Export failed: " + err.message, "❌");
+      }
+    }
+
+    function triggerImportJson() {
+      const fileInput = document.getElementById('import-json-file-input');
+      if (fileInput) fileInput.click();
+    }
+
+    async function handleImportJsonFile(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      event.target.value = '';
+
+      try {
+        showToast("Reading backup file...", "⬆️");
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const features = Array.isArray(data) ? data : data?.features;
+        if (!Array.isArray(features)) {
+          throw new Error("Invalid format: expected array of features or { features: [...] }");
+        }
+
+        showToast("Importing " + features.length + " features...", "⏳");
+        const res = await apiFetch('/api/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(features)
+        });
+
+        showToast("Imported " + res.imported + " features (" + res.unchanged + " unchanged)", "✅");
+        await refreshData(true);
+      } catch (err) {
+        showToast("Import failed: " + err.message, "❌");
+      }
+    }
 
     // 0. Auto-extract token from URL query (?token=...) or hash (#token=...)
     (function checkUrlToken() {
@@ -978,6 +1296,7 @@ export function renderDashboardHtml(): string {
 
       try {
         const feat = await apiFetch('/api/feature?project=' + encodeURIComponent(project) + '&name=' + encodeURIComponent(name));
+        lastLoadedDrawerFeature = feat;
         document.getElementById('drawer-type').textContent = feat.type;
 
         const tagsHtml = (feat.tags || []).map(t => '<span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] font-mono">#' + t + '</span>').join(' ');
@@ -988,6 +1307,32 @@ export function renderDashboardHtml(): string {
             <div class="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed break-words font-sans">\${s.content}</div>
           </div>
         \`).join('');
+
+        const related = feat.related_features || [];
+        const relatedHtml = related.length > 0 ? \`
+          <div class="space-y-2.5 pt-3 border-t border-zinc-800">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] uppercase font-mono text-indigo-400 font-bold">🔗 Related Features (\${related.length})</span>
+              <span class="text-[10px] text-zinc-500 font-mono">Structural & Semantic Overlap</span>
+            </div>
+            <div class="grid grid-cols-1 gap-2.5">
+              \${related.map(r => \`
+                <div onclick="openDrawer('\${r.project}', '\${r.name}')" class="bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 p-3 rounded-xl cursor-pointer transition space-y-1.5 shadow-sm">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-mono text-xs text-indigo-400 font-semibold truncate">📁 \${r.project} / \${r.name}</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-emerald-400 font-mono">⚡ \${r.similarity_score}</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-400 line-clamp-2">\${r.summary}</p>
+                  <div class="flex flex-wrap gap-1.5 text-[10px] text-zinc-500 font-mono">
+                    \${r.shared_files && r.shared_files.length > 0 ? \`<span class="text-zinc-300">📄 \${r.shared_files.length} shared file\${r.shared_files.length > 1 ? 's' : ''}</span>\` : ''}
+                    \${r.shared_tags && r.shared_tags.length > 0 ? \`<span class="text-zinc-300">🏷️ \${r.shared_tags.join(', ')}</span>\` : ''}
+                    \${r.library ? \`<span class="text-emerald-400">📦 \${r.library}</span>\` : ''}
+                  </div>
+                </div>
+              \`).join('')}
+            </div>
+          </div>
+        \` : '';
 
         const chunksHtml = (feat.chunks || []).map(c => \`
           <div class="bg-zinc-950/70 p-3 rounded-xl border border-zinc-800/80 space-y-1 text-[11px] font-mono">
@@ -1027,6 +1372,8 @@ export function renderDashboardHtml(): string {
               \${sectionsHtml}
             </div>
 
+            \${relatedHtml}
+
             <div class="space-y-2.5 pt-3 border-t border-zinc-800">
               <div class="flex items-center justify-between">
                 <span class="text-[10px] uppercase font-mono text-emerald-400 font-bold">Dense Vector Chunks (Vectorize)</span>
@@ -1035,15 +1382,24 @@ export function renderDashboardHtml(): string {
               \${chunksHtml}
             </div>
 
-            <div class="pt-4 border-t border-zinc-800">
-              <button type="button" onclick="promptDeleteFeature('\${feat.project}', '\${feat.name}')" class="w-full py-2.5 rounded-xl border border-red-900/60 bg-red-950/40 hover:bg-red-900/60 active:bg-red-900 text-red-300 font-medium text-xs transition flex items-center justify-center space-x-2">
-                <span>🗑️</span><span>Delete Feature from Lekh</span>
+            <div class="pt-4 border-t border-zinc-800 flex items-center space-x-2">
+              <button type="button" onclick="editCurrentDrawerFeature()" class="flex-1 py-2.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-100 font-medium text-xs transition flex items-center justify-center space-x-2 shadow-sm">
+                <span>✏️</span><span>Edit Feature</span>
+              </button>
+              <button type="button" onclick="promptDeleteFeature('\${feat.project}', '\${feat.name}')" class="py-2.5 px-4 rounded-xl border border-red-900/60 bg-red-950/40 hover:bg-red-900/60 active:bg-red-900 text-red-300 font-medium text-xs transition flex items-center justify-center space-x-2">
+                <span>🗑️</span><span>Delete</span>
               </button>
             </div>
           </div>
         \`;
       } catch (err) {
         body.innerHTML = '<div class="py-12 text-center text-red-400 text-xs">Error loading feature: ' + err.message + '</div>';
+      }
+    }
+
+    function editCurrentDrawerFeature() {
+      if (lastLoadedDrawerFeature) {
+        openEditFeatureModal(lastLoadedDrawerFeature);
       }
     }
 
@@ -1233,15 +1589,16 @@ export function renderDashboardHtml(): string {
       const project = document.getElementById('search-project').value.trim() || undefined;
       const type = document.getElementById('search-type').value || undefined;
       const limit = parseInt(document.getElementById('search-limit').value, 10) || 5;
+      const rerank = document.getElementById('search-rerank')?.checked ?? true;
 
       const resultsContainer = document.getElementById('search-results');
-      resultsContainer.innerHTML = '<div class="py-12 text-center text-zinc-500 text-xs">Searching Vectorize & D1 FTS5...</div>';
+      resultsContainer.innerHTML = '<div class="py-12 text-center text-zinc-500 text-xs">Searching Vectorize, D1 FTS5 & Workers AI Reranker...</div>';
 
       try {
         const results = await apiFetch('/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, project, type, limit })
+          body: JSON.stringify({ query: q, project, type, limit, rerank })
         });
 
         if (!results || results.length === 0) {
@@ -1255,17 +1612,35 @@ export function renderDashboardHtml(): string {
           card.className = "bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-2.5 sm:space-y-3 hover:border-zinc-700 active:scale-[0.99] transition cursor-pointer shadow-md";
           card.onclick = () => openDrawer(r.project, r.name);
 
+          const rerankBadge = r.rerank_score !== null && r.rerank_score !== undefined
+            ? \`<span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono font-medium" title="Cross-Encoder Reranker Score (@cf/baai/bge-reranker-base)">🎯 Rerank: \${r.rerank_score}</span>\`
+            : '';
+
+          const denseBadge = r.vector_score !== null
+            ? \`<span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-800 font-mono" title="Vector Cosine Similarity">✨ Dense: \${r.vector_score}</span>\`
+            : '';
+
+          const ftsBadge = r.fts_matched
+            ? '<span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800/80 font-mono">🔍 FTS5 Match</span>'
+            : '<span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-500 font-mono">Dense Only</span>';
+
+          const chunksCount = r.matched_chunks_count || 1;
+          const chunksBadge = \`<span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded bg-violet-950 text-violet-400 border border-violet-800/80 font-mono" title="Number of chunks matching query">📑 \${chunksCount} chunk\${chunksCount > 1 ? 's' : ''}</span>\`;
+
           card.innerHTML = \`
             <div class="flex flex-wrap items-center justify-between gap-1.5">
               <div class="flex items-center space-x-1.5 truncate">
                 <span class="font-mono text-xs text-indigo-400 font-medium">📁 \${r.project}</span>
                 <span class="text-zinc-600">/</span>
                 <span class="font-bold text-zinc-100 text-xs sm:text-sm truncate">\${r.name}</span>
-                <span class="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 font-mono">\${r.type}</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 font-mono uppercase">\${r.type}</span>
               </div>
-              <div class="flex items-center space-x-1.5">
-                <span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono" title="Reciprocal Rank Fusion Score">RRF: \${r.rrf_score}</span>
-                \${r.vector_score !== null ? \`<span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-800 font-mono" title="Cosine Similarity">Dense: \${r.vector_score}</span>\` : ''}
+              <div class="flex flex-wrap items-center gap-1.5">
+                \${rerankBadge}
+                <span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono" title="Reciprocal Rank Fusion Score">⚡ RRF: \${r.rrf_score}</span>
+                \${denseBadge}
+                \${ftsBadge}
+                \${chunksBadge}
               </div>
             </div>
 
@@ -1274,7 +1649,7 @@ export function renderDashboardHtml(): string {
               <div class="text-xs text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed break-words">\${r.snippet}</div>
             </div>
 
-            <p class="text-xs text-zinc-400 line-clamp-2">\${r.summary}</p>
+            <p class="text-xs text-zinc-400 line-clamp-2 leading-relaxed">\${r.summary}</p>
           \`;
           resultsContainer.appendChild(card);
         });

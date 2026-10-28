@@ -8,6 +8,7 @@ import {
   listProjects,
   deleteFeature,
   deleteProject,
+  findRelatedFeatures,
 } from "./store";
 
 export function createServer(env: Env): McpServer {
@@ -120,6 +121,12 @@ export function createServer(env: Env): McpServer {
           .max(20)
           .default(5)
           .describe("Maximum number of results to return (1-20, default 5)"),
+        rerank: z
+          .boolean()
+          .default(true)
+          .describe(
+            "Whether to apply Stage-3 Cross-Encoder reranking using @cf/baai/bge-reranker-base (default: true)"
+          ),
       }),
     },
     async (args) => {
@@ -293,6 +300,113 @@ export function createServer(env: Env): McpServer {
           content: [{ type: "text", text: JSON.stringify({ error: err.message || String(err) }) }],
         };
       }
+    }
+  );
+
+  // 8. find_related_features
+  server.registerTool(
+    "find_related_features",
+    {
+      description:
+        "Discover related features and architectural patterns across projects based on structural overlap (shared files, tags, library) and semantic similarity.",
+      inputSchema: z.object({
+        project: z
+          .string()
+          .describe("Working directory name the target feature belongs to (e.g. 'lekh')"),
+        name: z.string().describe("Target feature slug (e.g. 'dropdown-menu')"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .default(5)
+          .describe("Maximum number of related features to return (1-20, default 5)"),
+      }),
+    },
+    async ({ project, name, limit }) => {
+      try {
+        const related = await findRelatedFeatures(env, project, name, limit);
+        return {
+          content: [{ type: "text", text: JSON.stringify(related, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: err.message || String(err) }) }],
+        };
+      }
+    }
+  );
+
+  // Prompts
+  // 1. document-feature
+  server.registerPrompt(
+    "document-feature",
+    {
+      title: "Document Feature Architecture",
+      description:
+        "Generates a structured prompt instructing the agent to inspect recent changes and document a feature, pattern, or decision using Lekh save_feature.",
+      argsSchema: z.object({
+        project: z.string().describe("Working directory name (e.g. 'lekh')"),
+        name: z.string().describe("Feature slug in lowercase-kebab (e.g. 'jwt-auth-middleware')"),
+      }),
+    },
+    async ({ project, name }) => {
+      return {
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Please inspect the recent changes or implementation for '${name}' in project '${project}'. Then, call the 'save_feature' tool with:
+- project: "${project}"
+- name: "${name}"
+- type: "feature" | "pattern" | "decision" | "fix" | "refactor"
+- importance: 1 (minor), 2 (standard), or 3 (critical architecture)
+- library: any wrapped third-party library
+- summary: 2-4 sentences explaining what it does, why it exists, and when to reuse it
+- sections: structured breakdown including 'overview', 'architecture', 'gotchas', and 'trade-offs'
+- files: array of repository-relative files touched
+- tags: lowercase tags for domain and cross-cutting concerns (e.g. ['auth', 'd1'])`,
+            },
+          },
+        ],
+      };
+    }
+  );
+
+  // 2. check-prior-art
+  server.registerPrompt(
+    "check-prior-art",
+    {
+      title: "Check Prior Art in Lekh Memory",
+      description:
+        "Generates a structured prompt instructing the agent to search existing architectural documentation and related features before implementing new code.",
+      argsSchema: z.object({
+        topic: z
+          .string()
+          .describe(
+            "Topic, library, or feature area to search (e.g. 'auth middleware', 'd1 migrations')"
+          ),
+        project: z.string().optional().describe("Optional working directory name to scope search"),
+      }),
+    },
+    async ({ topic, project }) => {
+      const projectScope = project ? ` within project '${project}'` : " across all projects";
+      return {
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Before writing code or designing a new solution for '${topic}'${projectScope}, please perform the following checks:
+1. Call 'search_features' with query="${topic}"${project ? `, project="${project}"` : ""} to check if an existing pattern or utility exists.
+2. If an existing feature is found, call 'get_feature' or 'find_related_features' to inspect its architecture and shared dependencies.
+3. Review the discovered conventions, gotchas, and patterns to maintain consistency across the codebase.`,
+            },
+          },
+        ],
+      };
     }
   );
 

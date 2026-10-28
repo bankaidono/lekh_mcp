@@ -65,3 +65,34 @@ export async function embedQuery(env: { AI: Ai }, query: string): Promise<number
 
   return vec;
 }
+
+const RERANK_MODEL = "@cf/baai/bge-reranker-base";
+
+export async function rerankContexts(
+  env: { AI: Ai },
+  query: string,
+  contexts: string[]
+): Promise<Map<number, number>> {
+  const q = query.trim();
+  if (q.length === 0 || contexts.length === 0) {
+    return new Map();
+  }
+
+  const payload = {
+    query: q,
+    contexts: contexts.map((text) => ({ text: text || " " })),
+  };
+
+  const res = (await env.AI.run(RERANK_MODEL as any, payload)) as any;
+
+  const scoreMap = new Map<number, number>();
+  if (res && Array.isArray(res.response)) {
+    for (const item of res.response) {
+      if (typeof item.id === "number" && typeof item.score === "number") {
+        scoreMap.set(item.id, item.score);
+      }
+    }
+  }
+
+  return scoreMap;
+}

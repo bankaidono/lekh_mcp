@@ -26,6 +26,8 @@ export interface GroupedFeatureResult {
   fts_matched: boolean;
   matched_section: string;
   matched_text: string;
+  matched_chunks_count: number;
+  rerank_score?: number | null;
 }
 
 export function fuseAndGroupResults(
@@ -124,6 +126,14 @@ export function fuseAndGroupResults(
     chunks.sort((a, b) => b.rrf - a.rrf);
     const best = chunks[0];
 
+    // Multi-chunk RRF bonus: best.rrf + 0.25 * sum(chunks[1..min(chunks.length-1, 3)].rrf)
+    let bonus = 0;
+    const maxBonusChunks = Math.min(chunks.length - 1, 3);
+    for (let i = 1; i <= maxBonusChunks; i++) {
+      bonus += chunks[i].rrf;
+    }
+    const combinedRrf = best.rrf + 0.25 * bonus;
+
     // Determine if any chunk in the feature matched FTS
     const anyFtsMatched = chunks.some((c) => c.fts_matched);
     const bestFtsChunk = chunks.find((c) => c.fts_matched);
@@ -131,13 +141,14 @@ export function fuseAndGroupResults(
     groupedResults.push({
       feature_id: featureId,
       best_vector_id: best.vector_id,
-      rrf_score: best.rrf,
+      rrf_score: combinedRrf,
       vector_score: best.vector_score,
       vector_rank: best.vector_rank,
       fts_rank: best.fts_rank ?? bestFtsChunk?.fts_rank ?? null,
       fts_matched: anyFtsMatched,
       matched_section: best.section || bestFtsChunk?.section || "summary",
       matched_text: best.text || bestFtsChunk?.text || "",
+      matched_chunks_count: chunks.length,
     });
   }
 

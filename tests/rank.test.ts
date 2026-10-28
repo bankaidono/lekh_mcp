@@ -38,7 +38,7 @@ describe("fuseAndGroupResults", () => {
     expect(Math.abs(results[1].rrf_score - expectedRrfSingle)).toBeLessThan(1e-6);
   });
 
-  it("groups multiple chunks under the same feature_id picking the best chunk", () => {
+  it("groups multiple chunks under the same feature_id picking the best chunk and applying multi-chunk bonus", () => {
     const vectorMatches: VectorMatchItem[] = [
       { vector_id: "f10-c1", feature_id: 10, score: 0.92 },
       { vector_id: "f10-c0", feature_id: 10, score: 0.80 },
@@ -53,6 +53,31 @@ describe("fuseAndGroupResults", () => {
     expect(results[0].feature_id).toBe(10);
     expect(results[0].best_vector_id).toBe("f10-c1");
     expect(results[0].matched_section).toBe("architecture");
+    expect(results[0].matched_chunks_count).toBe(2);
+
+    const bestChunkRrf = 1 / 61 + 1 / 61; // vec rank 1 + fts rank 1
+    const secondChunkRrf = 1 / 62; // vec rank 2
+    const expectedRrf = bestChunkRrf + 0.25 * secondChunkRrf;
+    expect(Math.abs(results[0].rrf_score - expectedRrf)).toBeLessThan(1e-6);
+  });
+
+  it("caps multi-chunk bonus to top 3 additional chunks", () => {
+    // 5 chunks for feature 50
+    const vectorMatches: VectorMatchItem[] = [
+      { vector_id: "f50-c0", feature_id: 50, score: 0.99 }, // rank 1: 1/61
+      { vector_id: "f50-c1", feature_id: 50, score: 0.90 }, // rank 2: 1/62
+      { vector_id: "f50-c2", feature_id: 50, score: 0.85 }, // rank 3: 1/63
+      { vector_id: "f50-c3", feature_id: 50, score: 0.80 }, // rank 4: 1/64
+      { vector_id: "f50-c4", feature_id: 50, score: 0.75 }, // rank 5: 1/65 (should be excluded from bonus)
+    ];
+
+    const results = fuseAndGroupResults(vectorMatches, []);
+    expect(results.length).toBe(1);
+    expect(results[0].matched_chunks_count).toBe(5);
+
+    const bestRrf = 1 / 61;
+    const bonus = 0.25 * (1 / 62 + 1 / 63 + 1 / 64);
+    expect(Math.abs(results[0].rrf_score - (bestRrf + bonus))).toBeLessThan(1e-6);
   });
 
   it("breaks ties using importance and updated_at", () => {

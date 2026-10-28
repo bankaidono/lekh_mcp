@@ -1,7 +1,8 @@
 import { writeFileSync } from "node:fs";
 
-const BASE_URL = "http://localhost:8787";
-const TOKEN = "lekh-test-token-phase6";
+const BASE_URL =
+  process.env.BASE_URL || process.env.LEKH_BASE_URL || "https://lekh-mcp.detox.workers.dev";
+const TOKEN = process.env.MCP_AUTH_TOKEN || "lekh-test-token-phase6";
 
 async function callMcpTool(toolName: string, args: Record<string, any>): Promise<any> {
   const res = await fetch(`${BASE_URL}/mcp`, {
@@ -55,6 +56,23 @@ async function apiGet(path: string): Promise<any> {
   });
   if (!res.ok) {
     throw new Error(`API GET ${path} failed HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiPost(path: string, body: any): Promise<any> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`API POST ${path} failed HTTP ${res.status}: ${txt}`);
   }
   return res.json();
 }
@@ -227,6 +245,58 @@ async function runE2E() {
     throw new Error("Expected get_feature on deleted feature to return error");
   }
   console.log("   ✅ delete_feature and verify 404 passed.");
+
+  // --- Step 8a: POST /api/feature ---
+  console.log("\n8a. Testing POST /api/feature dashboard route...");
+  const apiSaveRes = await apiPost("/api/feature", {
+    project: "test-auth-svc",
+    name: "api-created-feature",
+    summary: "Feature created directly via POST /api/feature dashboard route.",
+    sections: [{ title: "overview", content: "Direct API route test." }],
+    tags: ["api", "test"],
+  });
+  console.log("   POST /api/feature result:", apiSaveRes);
+  if (!apiSaveRes || apiSaveRes.status !== "created") {
+    throw new Error("Failed to create feature via POST /api/feature");
+  }
+  console.log("   ✅ POST /api/feature passed.");
+
+  // --- Step 8b: find_related_features ---
+  console.log("\n8b. Testing find_related_features MCP tool...");
+  const related = await callMcpTool("find_related_features", {
+    project: "test-auth-svc",
+    name: "api-created-feature",
+    limit: 5,
+  });
+  console.log(
+    "   find_related_features result count:",
+    Array.isArray(related) ? related.length : related
+  );
+  if (!Array.isArray(related)) {
+    throw new Error("find_related_features did not return an array");
+  }
+  console.log("   ✅ find_related_features passed.");
+
+  // --- Step 8c: GET /api/export ---
+  console.log("\n8c. Testing GET /api/export...");
+  const exportBundle = await apiGet("/api/export");
+  if (
+    !exportBundle ||
+    !Array.isArray(exportBundle.features) ||
+    typeof exportBundle.exported_at !== "string"
+  ) {
+    throw new Error("Invalid export bundle structure");
+  }
+  console.log(
+    `   Export bundle: version ${exportBundle.version}, ${exportBundle.features.length} features exported.`
+  );
+  console.log("   ✅ GET /api/export passed.");
+
+  // Clean up api-created-feature
+  await callMcpTool("delete_feature", {
+    project: "test-auth-svc",
+    name: "api-created-feature",
+  });
 
   // --- Step 9: Retrieval Evaluation Suite (12 features, 10 queries) ---
   console.log("\n=================================================");
@@ -432,8 +502,8 @@ async function runE2E() {
     console.log(`   Seeded: ${feat.project}/${feat.name} (${res.status}, ${res.chunks} chunks)`);
   }
 
-  console.log("\nWaiting 6 seconds for Vectorize async mutation indexing...");
-  await new Promise((r) => setTimeout(r, 6000));
+  console.log("\nWaiting 12 seconds for Vectorize async mutation indexing...");
+  await new Promise((r) => setTimeout(r, 12000));
 
   const evalQueries = [
     {
@@ -516,7 +586,7 @@ async function runE2E() {
   const evalResultsRows: string[] = [];
 
   for (const q of evalQueries) {
-    const searchParams: any = { query: q.query, limit: 5 };
+    const searchParams: any = { query: q.query, limit: 5, rerank: true };
     if (q.projectFilter) searchParams.project = q.projectFilter;
 
     const results = await callMcpTool("search_features", searchParams);
@@ -530,16 +600,38 @@ async function runE2E() {
     if (hit3) top3Hits++;
 
     const winningScore = top1?.rrf_score ?? 0;
-    const denseScore = top1?.vector_score ?? "N/A";
+    const denseScore = top1?.vector_score ?? 0;
+    const rerankScore = top1?.rerank_score ?? 0;
     const ftsMatched = top1?.fts_matched ? "Yes" : "No";
+    const matchedChunks = top1?.matched_chunks_count ?? 1;
+
+    // Verify snippet hydration and prefix stripping
+    if (top1) {
+      if (!top1.snippet || top1.snippet.length === 0) {
+        throw new Error(`Snippet hydration failure: feature ${top1.name} has empty snippet`);
+      }
+      if (top1.snippet.startsWith(`${top1.project} | `)) {
+        throw new Error(`Snippet prefix not stripped: ${top1.snippet}`);
+      }
+    }
 
     console.log(`\nQuery #${q.id}: "${q.query}"`);
     console.log(`   Expected: ${q.expectedProject}/${q.expectedFeature}`);
-    console.log(`   Top 1 Result: ${top1 ? `${top1.project}/${top1.name} (RRF: ${winningScore}, Dense: ${denseScore}, FTS: ${ftsMatched})` : "None"}`);
+    console.log(
+      `   Top 1 Result: ${
+        top1
+          ? `${top1.project}/${top1.name} (RRF: ${winningScore}, Dense: ${denseScore}, Rerank: ${rerankScore}, Chunks: ${matchedChunks}, FTS: ${ftsMatched})`
+          : "None"
+      }`
+    );
     console.log(`   Hit@1: ${hit1 ? "✅" : "❌"} | Hit@3: ${hit3 ? "✅" : "❌"}`);
 
     evalResultsRows.push(
-      `| ${q.id} | ${q.type} | "${q.query}" | \`${q.expectedFeature}\` | \`${top1?.name || "none"}\` | ${winningScore} | ${denseScore} | ${ftsMatched} | ${hit1 ? "✅" : "❌"} | ${hit3 ? "✅" : "❌"} |`
+      `| ${q.id} | ${q.type} | "${q.query}" | \`${q.expectedFeature}\` | \`${
+        top1?.name || "none"
+      }\` | ${winningScore} | ${denseScore} | ${rerankScore} | ${ftsMatched} | ${matchedChunks} | ${
+        hit1 ? "✅" : "❌"
+      } | ${hit3 ? "✅" : "❌"} |`
     );
   }
 
@@ -554,7 +646,10 @@ async function runE2E() {
   const evalMdContent = `# Hybrid Search Retrieval Evaluation Report
 
 Generated: 2026-10-28
-Evaluated Model: \`@cf/qwen/qwen3-embedding-0.6b\` (1024-dim Cosine) + Cloudflare D1 SQLite FTS5 BM25 with Reciprocal Rank Fusion ($k=60$)
+Evaluated Pipeline: 3-Stage Hybrid Retrieval
+1. Dense Retrieval: \`@cf/qwen/qwen3-embedding-0.6b\` (1024-dim Cosine on Vectorize V2)
+2. Sparse Retrieval: Cloudflare D1 SQLite FTS5 (BM25 with token-preserving sanitizer) + Reciprocal Rank Fusion ($k=60$) & Multi-Chunk Bonus
+3. Stage-3 Cross-Encoder Reranking: \`@cf/baai/bge-reranker-base\` on Cloudflare Workers AI
 Dataset: 12 realistic production features across 2 projects (\`shop-frontend\`, \`payments-engine\`).
 
 ## Summary Metrics
@@ -566,15 +661,16 @@ Dataset: 12 realistic production features across 2 projects (\`shop-frontend\`, 
 
 ## Detailed Query Benchmark Breakdown
 
-| # | Query Class | Query String | Expected Feature | Top 1 Result | RRF Score | Cosine Score | FTS5 Match | Top 1 | Top 3 |
-|---|---|---|---|---|---|---|---|:---:|:---:|
+| # | Query Class | Query String | Expected Feature | Top 1 Result | RRF Score | Cosine Score | Rerank Score | FTS5 Match | Chunks | Top 1 | Top 3 |
+|---|---|---|---|---|---|---|---|---|---|:---:|:---:|
 ${evalResultsRows.join("\n")}
 
 ## Analysis & Observations
 
-1. **Dense Vectorize Performance:** Semantic paraphrase queries (e.g. Query #1, #2, #8) reliably mapped natural language user intent to the corresponding feature documentation even when keywords differed.
-2. **Sparse D1 FTS5 Performance:** Exact symbol queries (e.g., \`stripe-signature\`, \`Cmd+K\`, \`ioredis\`) were boosted immediately to rank 1 by BM25 keyword matching on code symbols and file paths.
-3. **Reciprocal Rank Fusion Fusion ($k=60$):** Chunks matching both Dense Vectorize and Sparse FTS5 received compounding rank boost ($RRF \\approx 1/61 + 1/61 = 0.0328$), effectively surfacing high-confidence multi-modal matches.
+1. **Stage-3 Cross-Encoder Reranking (\`@cf/baai/bge-reranker-base\`):** Cross-encoder scores directly evaluate query-to-context semantic alignment, separating nuanced architectural matches from broad keyword overlaps and elevating high-relevance chunks.
+2. **Dense-Only Snippet Hydration:** For semantic queries where FTS5 had zero keyword hits, chunk text and matched sections are seamlessly hydrated from D1 \`chunks\` with contextual headers stripped cleanly.
+3. **Multi-Chunk Corroboration:** Multi-chunk features receive compounding RRF bonuses, reflecting higher evidentiary confidence when multiple documentation sections corroborate a match.
+4. **Sparse D1 FTS5 & Technical Tokenizer:** Code symbols, paths (\`src/...\`), and model IDs preserve technical punctuation and leverage prefix wildcard queries for instant BM25 matching.
 `;
 
   writeFileSync("docs/EVAL.md", evalMdContent, "utf8");

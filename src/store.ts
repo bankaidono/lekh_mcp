@@ -6,7 +6,7 @@ import {
   type FeatureSection,
   type FeatureType,
 } from "./chunk";
-import { embedDocuments, embedQuery } from "./embed";
+import { embedDocuments, embedQuery, rerankContexts } from "./embed";
 import {
   fuseAndGroupResults,
   type VectorMatchItem,
@@ -40,6 +40,7 @@ export interface SearchParams {
   type?: FeatureType;
   library?: string;
   limit?: number;
+  rerank?: boolean;
 }
 
 export interface SearchResult {
@@ -58,6 +59,8 @@ export interface SearchResult {
   files: string[];
   tags: string[];
   updated_at: string;
+  matched_chunks_count: number;
+  rerank_score: number | null;
 }
 
 export interface FeatureRecord {
@@ -87,18 +90,99 @@ export interface ChunkRecord {
   vector_id: string;
 }
 
-export function sanitizeFts5Query(query: string): string {
-  const words = query
-    .replace(/[^\w\s-]/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter((w) => w.length > 0 && !["AND", "OR", "NOT"].includes(w.toUpperCase()));
+const STOP_WORDS = new Set([
+  "how",
+  "what",
+  "the",
+  "is",
+  "in",
+  "to",
+  "for",
+  "and",
+  "or",
+  "with",
+  "we",
+  "do",
+  "a",
+  "an",
+  "of",
+  "on",
+  "at",
+  "by",
+  "from",
+  "as",
+  "it",
+  "not",
+  "this",
+  "that",
+  "can",
+  "you",
+  "i",
+  "are",
+]);
 
-  if (words.length === 0) {
+export function sanitizeFts5Query(query: string): string {
+  const raw = query.trim();
+  if (!raw) {
     return '""';
   }
 
-  return words.map((w) => `"${w.replace(/"/g, "")}"`).join(" OR ");
+  // Split on whitespace and strip extraneous leading/trailing punctuation except internal technical chars
+  const rawTokens = raw
+    .split(/\s+/)
+    .map((t) => t.replace(/^[^\w/.-]+|[^\w/.-]+$/g, "").trim())
+    .filter((t) => t.length > 0);
+
+  const clauses = new Set<string>();
+
+  for (const token of rawTokens) {
+    const lower = token.toLowerCase();
+    if (STOP_WORDS.has(lower) || ["and", "or", "not"].includes(lower)) {
+      continue;
+    }
+
+    const cleanToken = token.replace(/"/g, "");
+    if (!cleanToken) continue;
+
+    // Technical token with punctuation
+    if (/[/._-]/.test(cleanToken)) {
+      clauses.add(`"${cleanToken}"`);
+      const subParts = cleanToken.split(/[/._-]+/).filter(Boolean);
+      for (const sp of subParts) {
+        const spLower = sp.toLowerCase();
+        if (sp.length > 1 && !STOP_WORDS.has(spLower) && !["and", "or", "not"].includes(spLower)) {
+          clauses.add(`"${sp}"`);
+          if (sp.length >= 4 && /^[a-zA-Z0-9]+$/.test(sp)) {
+            clauses.add(`"${sp}"*`);
+          }
+        }
+      }
+    } else {
+      // Alphanumeric word
+      if (cleanToken.length > 1) {
+        clauses.add(`"${cleanToken}"`);
+        if (cleanToken.length >= 4 && /^[a-zA-Z0-9]+$/.test(cleanToken)) {
+          clauses.add(`"${cleanToken}"*`);
+        }
+      } else if (rawTokens.length === 1) {
+        clauses.add(`"${cleanToken}"`);
+      }
+    }
+  }
+
+  if (clauses.size === 0) {
+    const fallback = raw
+      .replace(/[^\w]/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w.length > 0 && !["AND", "OR", "NOT"].includes(w.toUpperCase()));
+    if (fallback.length === 0) {
+      return '""';
+    }
+    return fallback.map((w) => `"${w.replace(/"/g, "")}"`).join(" OR ");
+  }
+
+  return Array.from(clauses).join(" OR ");
 }
 
 export async function saveFeature(
@@ -255,6 +339,7 @@ export async function saveFeature(
       type,
       library: library ?? "",
       importance,
+      section: c.section,
     },
   }));
 
@@ -424,8 +509,147 @@ export async function searchFeatures(
     });
   }
 
+function stripChunkPrefix(text: string, project: string, name: string, section: string): string {
+  if (!text) return "";
+  const prefix = `${project} | ${name} | ${section}\n`;
+  if (text.startsWith(prefix)) {
+    return text.slice(prefix.length).trim();
+  }
+  const genericPrefixMatch = text.match(/^[^|\n]+\s*\|\s*[^|\n]+\s*\|\s*[^\n]+\n/);
+  if (genericPrefixMatch) {
+    return text.slice(genericPrefixMatch[0].length).trim();
+  }
+  return text.trim();
+}
+
   const grouped = fuseAndGroupResults(vectorResults, ftsResults, tieBreakers);
-  const topGrouped = grouped.filter((g) => featureMap.has(g.feature_id)).slice(0, limit);
+  const filteredCandidates = grouped.filter((g) => featureMap.has(g.feature_id));
+
+  // Fix 4: Metadata keyword boost (+0.005 if name, library, tags, or files match query token)
+  const queryTokens = query
+    .toLowerCase()
+    .split(/[^a-zA-Z0-9_./-]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+
+  for (const g of filteredCandidates) {
+    const f = featureMap.get(g.feature_id);
+    if (!f) continue;
+    let hasMatch = false;
+    const fName = f.name.toLowerCase();
+    const fLib = (f.library || "").toLowerCase();
+    let fTags: string[] = [];
+    let fFiles: string[] = [];
+    try {
+      fTags = JSON.parse(f.tags_json || "[]");
+    } catch {}
+    try {
+      fFiles = JSON.parse(f.files_json || "[]");
+    } catch {}
+
+    for (const token of queryTokens) {
+      if (
+        fName.includes(token) ||
+        (fLib && fLib.includes(token)) ||
+        fTags.some((t) => t.toLowerCase().includes(token)) ||
+        fFiles.some((file) => file.toLowerCase().includes(token))
+      ) {
+        hasMatch = true;
+        break;
+      }
+    }
+
+    if (hasMatch) {
+      g.rrf_score += 0.005;
+    }
+  }
+
+  // Re-sort after metadata boost
+  filteredCandidates.sort((a, b) => b.rrf_score - a.rrf_score);
+
+  // Take candidate pool for snippet hydration and stage-3 reranking
+  const poolLimit = Math.max(limit, Math.min(limit * 3, 15));
+  const candidatePool = filteredCandidates.slice(0, poolLimit);
+
+  // Fix 1: Hydrate missing chunk text from D1 chunks for vector-only matches
+  const missingVectorIds = candidatePool
+    .filter((g) => !g.matched_text && g.best_vector_id)
+    .map((g) => g.best_vector_id);
+
+  if (missingVectorIds.length > 0) {
+    try {
+      const qPlaceholders = missingVectorIds.map(() => "?").join(",");
+      const { results: chunkRows } = await env.DB.prepare(
+        `SELECT vector_id, section, text FROM chunks WHERE vector_id IN (${qPlaceholders})`
+      )
+        .bind(...missingVectorIds)
+        .all<{ vector_id: string; section: string; text: string }>();
+
+      const chunkMap = new Map<string, { section: string; text: string }>();
+      for (const row of chunkRows || []) {
+        chunkMap.set(row.vector_id, { section: row.section, text: row.text });
+      }
+
+      for (const g of candidatePool) {
+        if (!g.matched_text && chunkMap.has(g.best_vector_id)) {
+          const row = chunkMap.get(g.best_vector_id)!;
+          g.matched_section = row.section;
+          g.matched_text = row.text;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to hydrate missing chunk text from D1:", err);
+    }
+  }
+
+  // Upgrade 5: Stage-3 Cross-Encoder Reranking
+  const shouldRerank = params.rerank !== false;
+  if (shouldRerank && candidatePool.length > 1) {
+    try {
+      const contexts = candidatePool.map((g) => {
+        const f = featureMap.get(g.feature_id);
+        const clean = stripChunkPrefix(g.matched_text, f.project, f.name, g.matched_section) || f.summary;
+        return `${f.name}: ${f.summary}\n${g.matched_section}: ${clean}`.slice(0, 1000);
+      });
+
+      const scoreMap = await rerankContexts(env, query, contexts);
+      for (let i = 0; i < candidatePool.length; i++) {
+        const score = scoreMap.get(i);
+        candidatePool[i].rerank_score = typeof score === "number" ? score : null;
+      }
+
+      // Rank-fuse Stage-2 RRF rank and Stage-3 Cross-Encoder Reranker rank
+      const sortedByRerank = [...candidatePool]
+        .filter((c) => c.rerank_score !== null && c.rerank_score !== undefined)
+        .sort((a, b) => (b.rerank_score ?? 0) - (a.rerank_score ?? 0));
+
+      const rerankRankMap = new Map<number, number>();
+      sortedByRerank.forEach((c, idx) => {
+        rerankRankMap.set(c.feature_id, idx + 1);
+      });
+
+      const rrfRankMap = new Map<number, number>();
+      candidatePool.forEach((c, idx) => {
+        rrfRankMap.set(c.feature_id, idx + 1);
+      });
+
+      candidatePool.sort((a, b) => {
+        const rrfRankA = rrfRankMap.get(a.feature_id) ?? candidatePool.length;
+        const rrfRankB = rrfRankMap.get(b.feature_id) ?? candidatePool.length;
+        const rerankRankA = rerankRankMap.get(a.feature_id) ?? candidatePool.length;
+        const rerankRankB = rerankRankMap.get(b.feature_id) ?? candidatePool.length;
+
+        // Weighted RRF: retrieval consensus (weight 1.0) + cross-encoder precision (weight 2.0)
+        const scoreA = 1 / (20 + rrfRankA) + 2 / (20 + rerankRankA);
+        const scoreB = 1 / (20 + rrfRankB) + 2 / (20 + rerankRankB);
+        return scoreB - scoreA;
+      });
+    } catch (err) {
+      console.error("Stage-3 cross-encoder rerank failed, falling back to RRF:", err);
+    }
+  }
+
+  const topGrouped = candidatePool.slice(0, limit);
 
   return topGrouped.map((g) => {
     const f = featureMap.get(g.feature_id);
@@ -438,9 +662,11 @@ export async function searchFeatures(
       tags = JSON.parse(f.tags_json);
     } catch {}
 
-    // Clean snippet
-    const snippetText = g.matched_text || f.summary || "";
-    const snippet = snippetText.length > 300 ? `${snippetText.slice(0, 300)}...` : snippetText;
+    // Clean snippet with prefix stripped
+    const cleanText = stripChunkPrefix(g.matched_text, f.project, f.name, g.matched_section);
+    const snippetSource = cleanText || f.summary || "";
+    const snippet =
+      snippetSource.length > 300 ? `${snippetSource.slice(0, 300)}...` : snippetSource;
 
     return {
       feature_id: f.id,
@@ -458,6 +684,11 @@ export async function searchFeatures(
       files,
       tags,
       updated_at: f.updated_at,
+      matched_chunks_count: g.matched_chunks_count ?? 1,
+      rerank_score:
+        g.rerank_score !== null && g.rerank_score !== undefined
+          ? Number(g.rerank_score.toFixed(4))
+          : null,
     };
   });
 }
@@ -575,7 +806,13 @@ export async function listProjects(env: Env): Promise<
   }>
 > {
   const { results } = await env.DB.prepare(
-    `SELECT project, count(id) as feature_count, sum(chunk_count) as total_chunks, max(updated_at) as last_updated
+    `SELECT
+       project,
+       COUNT(id) AS feature_count,
+       COALESCE(SUM(chunk_count), 0) AS total_chunks,
+       MAX(updated_at) AS last_updated,
+       GROUP_CONCAT(DISTINCT type) AS types_csv,
+       GROUP_CONCAT(tags_json, '||') AS all_tags_json
      FROM features
      GROUP BY project
      ORDER BY last_updated DESC`
@@ -584,28 +821,30 @@ export async function listProjects(env: Env): Promise<
   const projectsList = [];
 
   for (const r of results || []) {
-    const project = r.project;
-    const { results: featRows } = await env.DB.prepare(
-      "SELECT type, tags_json FROM features WHERE project = ?"
-    )
-      .bind(project)
-      .all<any>();
-
     const typesSet = new Set<string>();
-    const tagsSet = new Set<string>();
+    if (r.types_csv) {
+      r.types_csv
+        .split(",")
+        .map((t: string) => t.trim())
+        .filter(Boolean)
+        .forEach((t: string) => typesSet.add(t));
+    }
 
-    for (const f of featRows || []) {
-      if (f.type) typesSet.add(f.type);
-      try {
-        const parsedTags = JSON.parse(f.tags_json || "[]");
-        if (Array.isArray(parsedTags)) {
-          parsedTags.forEach((t) => tagsSet.add(t));
-        }
-      } catch {}
+    const tagsSet = new Set<string>();
+    if (r.all_tags_json) {
+      const tagArrays = r.all_tags_json.split("||");
+      for (const tStr of tagArrays) {
+        try {
+          const parsed = JSON.parse(tStr.trim());
+          if (Array.isArray(parsed)) {
+            parsed.forEach((t: string) => tagsSet.add(t));
+          }
+        } catch {}
+      }
     }
 
     projectsList.push({
-      project,
+      project: r.project,
       feature_count: r.feature_count,
       total_chunks: r.total_chunks || 0,
       last_updated: r.last_updated,
@@ -811,6 +1050,31 @@ export async function getOverviewGraph(env: Env): Promise<{
     });
   }
 
+  // Upgrade 6: Add shares_library links when multiple features share the same library
+  const libMap = new Map<string, string[]>();
+  for (const f of featuresData) {
+    if (f.library) {
+      const key = f.library.toLowerCase();
+      const list = libMap.get(key) || [];
+      list.push(`feat:${f.id}`);
+      libMap.set(key, list);
+    }
+  }
+
+  for (const [, featIds] of libMap.entries()) {
+    if (featIds.length > 1) {
+      for (let i = 0; i < featIds.length; i++) {
+        for (let j = i + 1; j < featIds.length; j++) {
+          links.push({
+            source: featIds[i],
+            target: featIds[j],
+            type: "shares_library",
+          });
+        }
+      }
+    }
+  }
+
   return {
     projects: projectsData,
     features: featuresData,
@@ -934,4 +1198,185 @@ export async function getSystemStats(env: Env): Promise<{
     },
     vectorize: vectorizeStats,
   };
+}
+
+export interface RelatedFeatureItem {
+  project: string;
+  name: string;
+  type: FeatureType;
+  library: string | null;
+  similarity_score: number;
+  shared_files: string[];
+  shared_tags: string[];
+  summary: string;
+}
+
+export async function findRelatedFeatures(
+  env: Env,
+  projectInput: string,
+  nameInput: string,
+  limit = 5
+): Promise<RelatedFeatureItem[]> {
+  const target = await getFeature(env, projectInput, nameInput);
+  if (!target) {
+    return [];
+  }
+
+  const targetFiles = new Set(target.files || []);
+  const targetTags = new Set(target.tags || []);
+  const targetLib = target.library ? target.library.toLowerCase() : null;
+
+  // 1. Fetch other candidate features from D1
+  const { results: otherFeatures } = await env.DB.prepare(
+    "SELECT id, project, name, type, library, summary, files_json, tags_json FROM features WHERE id != ?"
+  )
+    .bind(target.id)
+    .all<{
+      id: number;
+      project: string;
+      name: string;
+      type: FeatureType;
+      library: string | null;
+      summary: string;
+      files_json: string;
+      tags_json: string;
+    }>();
+
+  if (!otherFeatures || otherFeatures.length === 0) {
+    return [];
+  }
+
+  // 2. Semantic similarity via target summary embedding
+  const semanticScores = new Map<number, number>();
+  try {
+    const queryVec = await embedQuery(env, target.summary);
+    const vecResults = await env.VECTORIZE.query(queryVec, {
+      topK: Math.min(20, (otherFeatures.length + 1) * 2),
+      returnMetadata: "all",
+    });
+
+    for (const match of vecResults.matches || []) {
+      const featId = match.metadata?.feature_id as number;
+      if (featId && featId !== target.id) {
+        const current = semanticScores.get(featId) ?? -1;
+        if (match.score > current) {
+          semanticScores.set(featId, match.score);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Semantic search failed in findRelatedFeatures:", err);
+  }
+
+  // 3. Structural + Semantic scoring
+  const scoredItems: Array<{
+    item: RelatedFeatureItem;
+    score: number;
+  }> = [];
+
+  for (const f of otherFeatures) {
+    let fFiles: string[] = [];
+    let fTags: string[] = [];
+    try {
+      fFiles = JSON.parse(f.files_json || "[]");
+    } catch {}
+    try {
+      fTags = JSON.parse(f.tags_json || "[]");
+    } catch {}
+
+    const sharedFiles = fFiles.filter((file) => targetFiles.has(file));
+    const sharedTags = fTags.filter((tag) => targetTags.has(tag));
+    const sameLib = Boolean(targetLib && f.library && f.library.toLowerCase() === targetLib);
+
+    const structuralScore =
+      Math.min(sharedFiles.length * 0.35, 0.4) +
+      Math.min(sharedTags.length * 0.2, 0.3) +
+      (sameLib ? 0.3 : 0);
+
+    const semScore = semanticScores.get(f.id) ?? 0;
+    const combinedScore = (semScore > 0 ? semScore * 0.6 : 0) + structuralScore * 0.4;
+
+    if (sharedFiles.length > 0 || sharedTags.length > 0 || sameLib || semScore > 0.65) {
+      scoredItems.push({
+        item: {
+          project: f.project,
+          name: f.name,
+          type: f.type,
+          library: f.library,
+          similarity_score: Number(combinedScore.toFixed(4)),
+          shared_files: sharedFiles,
+          shared_tags: sharedTags,
+          summary: f.summary,
+        },
+        score: combinedScore,
+      });
+    }
+  }
+
+  scoredItems.sort((a, b) => b.score - a.score);
+  return scoredItems.slice(0, limit).map((s) => s.item);
+}
+
+export interface ExportBundle {
+  version: number;
+  exported_at: string;
+  features: SaveFeatureParams[];
+}
+
+export async function exportAllFeatures(env: Env): Promise<ExportBundle> {
+  const { results } = await env.DB.prepare(
+    "SELECT project, name, type, importance, library, summary, sections_json, files_json, tags_json FROM features ORDER BY project ASC, name ASC"
+  ).all<any>();
+
+  const features: SaveFeatureParams[] = (results || []).map((row) => {
+    let sections: FeatureSection[] = [];
+    let files: string[] = [];
+    let tags: string[] = [];
+    try {
+      sections = JSON.parse(row.sections_json || "[]");
+    } catch {}
+    try {
+      files = JSON.parse(row.files_json || "[]");
+    } catch {}
+    try {
+      tags = JSON.parse(row.tags_json || "[]");
+    } catch {}
+
+    return {
+      project: row.project,
+      name: row.name,
+      type: row.type,
+      importance: row.importance,
+      library: row.library,
+      summary: row.summary,
+      sections,
+      files,
+      tags,
+    };
+  });
+
+  return {
+    version: 1,
+    exported_at: new Date().toISOString(),
+    features,
+  };
+}
+
+export async function importFeatures(
+  env: Env,
+  features: SaveFeatureParams[]
+): Promise<{ imported: number; unchanged: number; total: number }> {
+  let imported = 0;
+  let unchanged = 0;
+
+  for (const f of features) {
+    const res = await saveFeature(env, f);
+    if (res.status === "created" || res.status === "updated") {
+      imported++;
+    } else {
+      unchanged++;
+    }
+  }
+
+  return { imported, unchanged, total: features.length };
 }

@@ -9,6 +9,10 @@ import {
   deleteFeature,
   deleteProject,
   getSystemStats,
+  saveFeature,
+  findRelatedFeatures,
+  exportAllFeatures,
+  importFeatures,
 } from "./store";
 
 const corsHeaders: Record<string, string> = {
@@ -128,7 +132,62 @@ export default {
               404
             );
           }
-          return json(feat);
+          const related = await findRelatedFeatures(env, project, name, 5);
+          return json({ ...feat, related_features: related });
+        } catch (err: any) {
+          return json({ error: err.message || String(err) }, 500);
+        }
+      }
+
+      if (url.pathname === "/api/feature" && request.method === "POST") {
+        try {
+          const body = (await request.json()) as any;
+          if (
+            !body ||
+            !body.project ||
+            !body.name ||
+            !body.summary ||
+            !Array.isArray(body.sections)
+          ) {
+            return json(
+              {
+                error:
+                  "Invalid feature payload: 'project', 'name', 'summary', and 'sections' are required",
+              },
+              400
+            );
+          }
+          const res = await saveFeature(env, body);
+          return json(res, 200);
+        } catch (err: any) {
+          return json({ error: err.message || String(err) }, 500);
+        }
+      }
+
+      if (url.pathname === "/api/export" && (request.method === "GET" || request.method === "HEAD")) {
+        try {
+          const bundle = await exportAllFeatures(env);
+          return json(bundle);
+        } catch (err: any) {
+          return json({ error: err.message || String(err) }, 500);
+        }
+      }
+
+      if (url.pathname === "/api/import" && request.method === "POST") {
+        try {
+          const body = (await request.json()) as any;
+          const features = Array.isArray(body) ? body : body?.features;
+          if (!Array.isArray(features)) {
+            return json(
+              {
+                error:
+                  "Invalid import payload: expected an array of features or an object with { features: [...] }",
+              },
+              400
+            );
+          }
+          const res = await importFeatures(env, features);
+          return json(res);
         } catch (err: any) {
           return json({ error: err.message || String(err) }, 500);
         }
@@ -149,6 +208,7 @@ export default {
             type: body.type,
             library: body.library,
             limit: body.limit,
+            rerank: body.rerank,
           });
           return json(results);
         } catch (err: any) {
