@@ -676,7 +676,6 @@ export function renderDashboardHtml(): string {
         btn.textContent = 'Save Feature';
       }
     }
-    }
 
     // --- 1-Click JSON Backup Export & Import ---
     async function exportFeaturesJson() {
