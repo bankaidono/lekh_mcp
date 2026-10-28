@@ -7,6 +7,7 @@ import {
   listFeatures,
   listProjects,
   deleteFeature,
+  deleteProject,
 } from "./store";
 
 export function createServer(env: Env): McpServer {
@@ -256,6 +257,33 @@ export function createServer(env: Env): McpServer {
     async ({ project, name }) => {
       try {
         const result = await deleteFeature(env, project, name);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err: any) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: err.message || String(err) }) }],
+        };
+      }
+    }
+  );
+
+  // 7. delete_project
+  server.registerTool(
+    "delete_project",
+    {
+      description:
+        "Delete an entire project, all its feature records, chunks, and dense vectors from Vectorize and D1 FTS5.",
+      inputSchema: z.object({
+        project: z
+          .string()
+          .describe("Working directory name of the project to delete (e.g. 'lekh')"),
+      }),
+    },
+    async ({ project }) => {
+      try {
+        const result = await deleteProject(env, project);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };

@@ -666,6 +666,56 @@ export async function deleteFeature(
   };
 }
 
+export async function deleteProject(
+  env: Env,
+  projectInput: string
+): Promise<{ deleted: boolean; project: string; features_removed: number; vectors_removed: number }> {
+  const project = normalizeName(projectInput);
+
+  const { results: featureRows } = await env.DB.prepare(
+    "SELECT id FROM features WHERE project = ?"
+  )
+    .bind(project)
+    .all<{ id: number }>();
+
+  if (!featureRows || featureRows.length === 0) {
+    return {
+      deleted: false,
+      project,
+      features_removed: 0,
+      vectors_removed: 0,
+    };
+  }
+
+  const { results: chunkRows } = await env.DB.prepare(
+    "SELECT vector_id FROM chunks WHERE project = ?"
+  )
+    .bind(project)
+    .all<{ vector_id: string }>();
+
+  const vectorIds = (chunkRows || []).map((c) => c.vector_id);
+
+  if (vectorIds.length > 0) {
+    for (let i = 0; i < vectorIds.length; i += 500) {
+      const batch = vectorIds.slice(i, i + 500);
+      await env.VECTORIZE.deleteByIds(batch);
+    }
+  }
+
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM chunks_fts WHERE project = ?").bind(project),
+    env.DB.prepare("DELETE FROM chunks WHERE project = ?").bind(project),
+    env.DB.prepare("DELETE FROM features WHERE project = ?").bind(project),
+  ]);
+
+  return {
+    deleted: true,
+    project,
+    features_removed: featureRows.length,
+    vectors_removed: vectorIds.length,
+  };
+}
+
 export async function getOverviewGraph(env: Env): Promise<{
   projects: any[];
   features: any[];
@@ -775,5 +825,113 @@ export async function getOverviewGraph(env: Env): Promise<{
       nodes,
       links,
     },
+  };
+}
+
+export async function getSystemStats(env: Env): Promise<{
+  ai: {
+    model: string;
+    dimensions: number;
+    total_tokens_estimated: number;
+    neurons_used_estimated: number;
+    neurons_daily_free_limit: number;
+    neuron_rate_per_million_tokens: number;
+    estimated_cost_usd: number;
+  };
+  d1: {
+    database_name: string;
+    database_size_bytes: number;
+    database_size_formatted: string;
+    total_projects: number;
+    total_features: number;
+    total_chunks: number;
+    total_fts_entries: number;
+    storage_free_limit_bytes: number;
+  };
+  vectorize: {
+    index_name: string;
+    vector_count: number;
+    dimensions: number;
+    metric: string;
+    processed_up_to_mutation?: string;
+  };
+}> {
+  // 1. D1 stats & row counts
+  const queryRes = await env.DB.prepare(`
+    SELECT 
+      (SELECT COUNT(DISTINCT project) FROM features) as total_projects,
+      (SELECT COUNT(*) FROM features) as total_features,
+      (SELECT COUNT(*) FROM chunks) as total_chunks,
+      (SELECT COUNT(*) FROM chunks_fts) as total_fts_entries,
+      (SELECT COALESCE(SUM(LENGTH(text)), 0) FROM chunks) as total_chunk_chars
+  `).all<{
+    total_projects: number;
+    total_features: number;
+    total_chunks: number;
+    total_fts_entries: number;
+    total_chunk_chars: number;
+  }>();
+
+  const counts = queryRes.results[0] || {
+    total_projects: 0,
+    total_features: 0,
+    total_chunks: 0,
+    total_fts_entries: 0,
+    total_chunk_chars: 0,
+  };
+
+  const dbSizeBytes = queryRes.meta?.size_after || 0;
+  const dbSizeFormatted =
+    dbSizeBytes > 1024 * 1024
+      ? `${(dbSizeBytes / (1024 * 1024)).toFixed(2)} MB`
+      : `${(dbSizeBytes / 1024).toFixed(1)} KB`;
+
+  // 2. Vectorize stats via .describe()
+  let vectorizeStats: any = {
+    index_name: "lekh-vectors",
+    vector_count: counts.total_chunks,
+    dimensions: 1024,
+    metric: "cosine",
+  };
+  try {
+    const desc = await env.VECTORIZE.describe();
+    const config = desc.config && "dimensions" in desc.config ? desc.config : null;
+    vectorizeStats = {
+      index_name: desc.name || "lekh-vectors",
+      vector_count: (desc.vectorsCount && desc.vectorsCount > 0) ? desc.vectorsCount : counts.total_chunks,
+      dimensions: config?.dimensions ?? 1024,
+      metric: (config?.metric as string) ?? "cosine",
+    };
+  } catch (err) {
+    console.warn("Vectorize describe error:", err);
+  }
+
+  // 3. Workers AI Neuron calculation
+  // Cloudflare rate: 1,075 neurons per 1,000,000 input tokens ($0.012 / 1M tokens)
+  const estimatedTokens = Math.ceil((counts.total_chunk_chars || 0) / 3.8);
+  const neuronsUsed = (estimatedTokens / 1_000_000) * 1075;
+  const estimatedCost = (estimatedTokens / 1_000_000) * 0.012;
+
+  return {
+    ai: {
+      model: "@cf/qwen/qwen3-embedding-0.6b",
+      dimensions: 1024,
+      total_tokens_estimated: estimatedTokens,
+      neurons_used_estimated: Number(neuronsUsed.toFixed(4)),
+      neurons_daily_free_limit: 10_000,
+      neuron_rate_per_million_tokens: 1075,
+      estimated_cost_usd: Number(estimatedCost.toFixed(6)),
+    },
+    d1: {
+      database_name: "lekh-db",
+      database_size_bytes: dbSizeBytes,
+      database_size_formatted: dbSizeFormatted,
+      total_projects: counts.total_projects,
+      total_features: counts.total_features,
+      total_chunks: counts.total_chunks,
+      total_fts_entries: counts.total_fts_entries,
+      storage_free_limit_bytes: 5 * 1024 * 1024 * 1024,
+    },
+    vectorize: vectorizeStats,
   };
 }

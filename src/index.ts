@@ -2,11 +2,18 @@ import { createMcpHandler } from "agents/mcp/server";
 import { checkBearer } from "./auth";
 import { createServer } from "./mcp";
 import { renderDashboardHtml } from "./ui";
-import { getOverviewGraph, getFeature, searchFeatures } from "./store";
+import {
+  getOverviewGraph,
+  getFeature,
+  searchFeatures,
+  deleteFeature,
+  deleteProject,
+  getSystemStats,
+} from "./store";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS, HEAD",
   "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
 };
 
@@ -144,6 +151,50 @@ export default {
             limit: body.limit,
           });
           return json(results);
+        } catch (err: any) {
+          return json({ error: err.message || String(err) }, 500);
+        }
+      }
+
+      if (url.pathname === "/api/feature" && request.method === "DELETE") {
+        const project = url.searchParams.get("project");
+        const name = url.searchParams.get("name");
+        if (!project || !name) {
+          return json(
+            { error: "Missing required query parameters: 'project' and 'name'" },
+            400
+          );
+        }
+
+        try {
+          const res = await deleteFeature(env, project, name);
+          return json(res);
+        } catch (err: any) {
+          return json({ error: err.message || String(err) }, 500);
+        }
+      }
+
+      if (url.pathname === "/api/project" && request.method === "DELETE") {
+        const project = url.searchParams.get("project");
+        if (!project) {
+          return json(
+            { error: "Missing required query parameter: 'project'" },
+            400
+          );
+        }
+
+        try {
+          const res = await deleteProject(env, project);
+          return json(res);
+        } catch (err: any) {
+          return json({ error: err.message || String(err) }, 500);
+        }
+      }
+
+      if (url.pathname === "/api/stats" && (request.method === "GET" || request.method === "HEAD")) {
+        try {
+          const stats = await getSystemStats(env);
+          return json(stats);
         } catch (err: any) {
           return json({ error: err.message || String(err) }, 500);
         }

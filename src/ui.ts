@@ -114,6 +114,9 @@ export function renderDashboardHtml(): string {
       <button type="button" onclick="switchView('search')" id="tab-search" class="px-2.5 sm:px-3 py-2.5 sm:py-3 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap text-xs sm:text-sm font-medium">
         <span>⚡ Search</span>
       </button>
+      <button type="button" onclick="switchView('stats')" id="tab-stats" class="px-2.5 sm:px-3 py-2.5 sm:py-3 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap text-xs sm:text-sm font-medium">
+        <span>📊 Stats & Usage</span>
+      </button>
     </div>
 
     <div class="hidden md:flex items-center space-x-2 text-[11px] text-zinc-400 shrink-0 pl-4">
@@ -149,7 +152,7 @@ export function renderDashboardHtml(): string {
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3 sm:pb-4">
           <div>
             <h2 class="text-base sm:text-lg font-bold text-zinc-100">All Working Directories & Projects</h2>
-            <p class="text-xs text-zinc-400">Click any project card to view its recorded features and architecture.</p>
+            <p class="text-xs text-zinc-400">Click any project card to explore features or click 🗑️ to delete.</p>
           </div>
           <div id="projects-summary-tag" class="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-md self-start sm:self-auto">
             Showing <span id="projects-total-count" class="font-semibold text-zinc-200">0</span> active projects
@@ -178,7 +181,7 @@ export function renderDashboardHtml(): string {
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 class="text-base sm:text-lg font-bold text-zinc-100">Features & Chunks</h2>
-            <p class="text-xs text-zinc-400">Click any feature to inspect markdown sections and vector embeddings.</p>
+            <p class="text-xs text-zinc-400">Click any feature to inspect markdown sections, or click 🗑️ to delete.</p>
           </div>
 
           <div class="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
@@ -275,6 +278,25 @@ export function renderDashboardHtml(): string {
         </div>
       </div>
     </div>
+
+    <!-- VIEW 5: Live Infrastructure & Stats -->
+    <div id="view-stats" class="absolute inset-0 hidden overflow-y-auto p-3 sm:p-6 scrollbar-thin">
+      <div class="max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-20">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3 sm:pb-4">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-zinc-100">Live Compute & Resource Stats</h2>
+            <p class="text-xs text-zinc-400">Real-time stats from Workers AI Neurons, Cloudflare D1, and Vectorize V2.</p>
+          </div>
+          <button type="button" onclick="loadStatsView(true)" class="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:bg-zinc-800 active:bg-zinc-700 transition flex items-center space-x-1.5">
+            <span>🔄 Refresh Stats</span>
+          </button>
+        </div>
+
+        <div id="stats-content-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+          <!-- Dynamically populated via loadStatsView -->
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- Feature Detail Drawer (Full width on mobile, slide-over on desktop) -->
@@ -290,6 +312,36 @@ export function renderDashboardHtml(): string {
     </div>
     <div id="drawer-body" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 scrollbar-thin text-xs text-zinc-300 pb-20">
       <!-- Populated via openDrawer -->
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-3 sm:p-4">
+    <div class="bg-zinc-900 border border-red-900/60 rounded-2xl p-4 sm:p-6 max-w-md w-full shadow-2xl space-y-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 text-xl font-bold shrink-0">
+          ⚠️
+        </div>
+        <div>
+          <h3 class="font-bold text-zinc-100 text-sm sm:text-base" id="delete-modal-title">Confirm Deletion</h3>
+          <div class="text-[11px] text-zinc-400" id="delete-modal-subtitle">Permanent removal of vector & database records</div>
+        </div>
+      </div>
+
+      <div class="bg-zinc-950 p-3.5 rounded-xl border border-zinc-800 text-xs space-y-2 text-zinc-300">
+        <p id="delete-modal-msg" class="leading-relaxed"></p>
+        <div class="text-[11px] text-red-400 font-mono bg-red-950/40 p-2 rounded-lg border border-red-950/80">
+          ⚠️ Action cannot be undone. Chunks, vector embeddings, and search records will be erased.
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end space-x-2 pt-2">
+        <button type="button" onclick="closeDeleteModal()" class="min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 active:bg-zinc-700 transition">Cancel</button>
+        <button type="button" id="confirm-delete-btn" onclick="executeDeleteAction()" class="min-h-[40px] px-4 py-2 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 active:bg-red-700 text-white transition flex items-center space-x-1.5">
+          <span id="delete-btn-spinner" class="hidden">⏳</span>
+          <span id="delete-btn-label">Delete Permanently</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -336,6 +388,8 @@ export function renderDashboardHtml(): string {
     let autoRefreshTimer = null;
     let currentSvg = null;
     let currentZoom = null;
+    let pendingDelete = null; // { type: 'project' | 'feature', project: string, name?: string }
+    let currentDrawerFeature = null; // { project: string, name: string }
 
     // 0. Auto-extract token from URL query (?token=...) or hash (#token=...)
     (function checkUrlToken() {
@@ -450,7 +504,7 @@ export function renderDashboardHtml(): string {
 
     function switchView(view) {
       currentView = view;
-      ['projects', 'features', 'graph', 'search'].forEach(v => {
+      ['projects', 'features', 'graph', 'search', 'stats'].forEach(v => {
         const el = document.getElementById('view-' + v);
         const tab = document.getElementById('tab-' + v);
         if (el && tab) {
@@ -472,6 +526,8 @@ export function renderDashboardHtml(): string {
         renderFeaturesList();
       } else if (view === 'projects') {
         renderProjectsGrid();
+      } else if (view === 'stats') {
+        loadStatsView(false);
       }
     }
 
@@ -545,6 +601,7 @@ export function renderDashboardHtml(): string {
         renderProjectsGrid();
         renderFeaturesList();
         if (currentView === 'graph') renderGraph();
+        if (currentView === 'stats') loadStatsView(false);
 
         if (showFeedback) showToast("Features & Knowledge Graph synced!", "🔄");
       } catch (err) {
@@ -569,6 +626,64 @@ export function renderDashboardHtml(): string {
         showToast("Auto-refresh enabled (15s)", "⏱️");
       } else {
         showToast("Auto-refresh paused", "⏸️");
+      }
+    }
+
+    // --- Deletion Flow (Projects & Features) ---
+    function promptDeleteProject(project, count) {
+      pendingDelete = { type: 'project', project };
+      document.getElementById('delete-modal-title').textContent = "Delete Project '" + project + "'";
+      document.getElementById('delete-modal-subtitle').textContent = "Removes all features & vectors under this project";
+      document.getElementById('delete-modal-msg').innerHTML = "Are you sure you want to delete project <strong class='text-white font-mono'>" + project + "</strong> and all its <strong>" + count + " feature(s)</strong>? This will permanently remove its vector embeddings and search indexes.";
+      document.getElementById('delete-modal').classList.remove('hidden');
+    }
+
+    function promptDeleteFeature(project, name) {
+      pendingDelete = { type: 'feature', project, name };
+      document.getElementById('delete-modal-title').textContent = "Delete Feature '" + name + "'";
+      document.getElementById('delete-modal-subtitle').textContent = "Removes feature record, chunks & embeddings";
+      document.getElementById('delete-modal-msg').innerHTML = "Are you sure you want to delete feature <strong class='text-white font-mono'>" + name + "</strong> from project <strong class='text-indigo-400 font-mono'>" + project + "</strong>? All vector chunks and FTS5 entries will be purged.";
+      document.getElementById('delete-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('delete-modal').classList.add('hidden');
+      pendingDelete = null;
+    }
+
+    async function executeDeleteAction() {
+      if (!pendingDelete) return;
+
+      const spinner = document.getElementById('delete-btn-spinner');
+      const label = document.getElementById('delete-btn-label');
+      const btn = document.getElementById('confirm-delete-btn');
+
+      spinner.classList.remove('hidden');
+      label.textContent = "Deleting...";
+      btn.disabled = true;
+
+      try {
+        if (pendingDelete.type === 'project') {
+          const res = await apiFetch('/api/project?project=' + encodeURIComponent(pendingDelete.project), {
+            method: 'DELETE'
+          });
+          showToast("Project '" + pendingDelete.project + "' deleted (" + res.features_removed + " features removed)", "🗑️");
+        } else if (pendingDelete.type === 'feature') {
+          const res = await apiFetch('/api/feature?project=' + encodeURIComponent(pendingDelete.project) + '&name=' + encodeURIComponent(pendingDelete.name), {
+            method: 'DELETE'
+          });
+          showToast("Feature '" + pendingDelete.name + "' deleted (" + res.vectors_removed + " vectors removed)", "🗑️");
+          closeDrawer();
+        }
+
+        closeDeleteModal();
+        await refreshData(false);
+      } catch (err) {
+        alert("Failed to delete: " + err.message);
+      } finally {
+        spinner.classList.add('hidden');
+        label.textContent = "Delete Permanently";
+        btn.disabled = false;
       }
     }
 
@@ -620,9 +735,14 @@ export function renderDashboardHtml(): string {
                   <div class="text-[11px] text-zinc-500 truncate">Updated \${p.last_updated || 'recently'}</div>
                 </div>
               </div>
-              <span class="text-xs font-mono font-semibold px-2 py-1 rounded bg-zinc-800 text-zinc-200 border border-zinc-700 shrink-0">
-                \${p.feature_count} \${p.feature_count === 1 ? 'Feature' : 'Features'}
-              </span>
+              <div class="flex items-center space-x-1.5 shrink-0">
+                <span class="text-xs font-mono font-semibold px-2 py-1 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
+                  \${p.feature_count} \${p.feature_count === 1 ? 'Feature' : 'Features'}
+                </span>
+                <button type="button" onclick="event.stopPropagation(); promptDeleteProject('\${p.project}', \${p.feature_count})" title="Delete project and all its features" class="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-red-400 active:text-red-300 hover:bg-zinc-800 transition">
+                  🗑️
+                </button>
+              </div>
             </div>
 
             <div class="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-800/80 text-xs">
@@ -708,11 +828,16 @@ export function renderDashboardHtml(): string {
         card.innerHTML = \`
           <div class="flex items-center justify-between gap-2">
             <span class="text-xs font-mono font-medium text-indigo-400 truncate">📁 \${f.project}</span>
-            <span class="text-[10px] px-2 py-0.5 rounded uppercase font-mono font-semibold shrink-0 \${
-              f.type === 'decision' ? 'bg-amber-950 text-amber-400 border border-amber-900/60' :
-              f.type === 'pattern' ? 'bg-indigo-950 text-indigo-400 border border-indigo-900/60' :
-              'bg-emerald-950 text-emerald-400 border border-emerald-900/60'
-            }">\${f.type}</span>
+            <div class="flex items-center space-x-1.5 shrink-0">
+              <span class="text-[10px] px-2 py-0.5 rounded uppercase font-mono font-semibold \${
+                f.type === 'decision' ? 'bg-amber-950 text-amber-400 border border-amber-900/60' :
+                f.type === 'pattern' ? 'bg-indigo-950 text-indigo-400 border border-indigo-900/60' :
+                'bg-emerald-950 text-emerald-400 border border-emerald-900/60'
+              }">\${f.type}</span>
+              <button type="button" onclick="event.stopPropagation(); promptDeleteFeature('\${f.project}', '\${f.name}')" title="Delete feature" class="w-6 h-6 flex items-center justify-center rounded text-zinc-500 hover:text-red-400 active:text-red-300 hover:bg-zinc-800 transition">
+                🗑️
+              </button>
+            </div>
           </div>
           <h3 class="text-sm sm:text-base font-bold text-zinc-100 hover:text-emerald-400 transition tracking-tight truncate">\${f.name}</h3>
           <p class="text-xs text-zinc-300 line-clamp-2 leading-relaxed">\${f.summary}</p>
@@ -826,7 +951,6 @@ export function renderDashboardHtml(): string {
       });
     }
 
-    // Zoom Helpers for Mobile Buttons
     function zoomIn() {
       if (currentSvg && currentZoom) {
         currentSvg.transition().duration(250).call(currentZoom.scaleBy, 1.3);
@@ -845,6 +969,7 @@ export function renderDashboardHtml(): string {
 
     // --- Feature Detail Drawer ---
     async function openDrawer(project, name) {
+      currentDrawerFeature = { project, name };
       const drawer = document.getElementById('feature-drawer');
       const body = document.getElementById('drawer-body');
       document.getElementById('drawer-name').textContent = name;
@@ -909,6 +1034,12 @@ export function renderDashboardHtml(): string {
               </div>
               \${chunksHtml}
             </div>
+
+            <div class="pt-4 border-t border-zinc-800">
+              <button type="button" onclick="promptDeleteFeature('\${feat.project}', '\${feat.name}')" class="w-full py-2.5 rounded-xl border border-red-900/60 bg-red-950/40 hover:bg-red-900/60 active:bg-red-900 text-red-300 font-medium text-xs transition flex items-center justify-center space-x-2">
+                <span>🗑️</span><span>Delete Feature from Lekh</span>
+              </button>
+            </div>
           </div>
         \`;
       } catch (err) {
@@ -918,6 +1049,180 @@ export function renderDashboardHtml(): string {
 
     function closeDrawer() {
       document.getElementById('feature-drawer').classList.add('translate-x-full');
+      currentDrawerFeature = null;
+    }
+
+    // --- Stats & Usage Inspector ---
+    async function loadStatsView(showFeedback = false) {
+      const container = document.getElementById('stats-content-grid');
+      container.innerHTML = '<div class="col-span-full py-16 text-center text-zinc-500 text-xs">Loading live Cloudflare infrastructure stats...</div>';
+
+      try {
+        const stats = await apiFetch('/api/stats');
+        const neuronPercent = ((stats.ai.neurons_used_estimated / stats.ai.neurons_daily_free_limit) * 100).toFixed(2);
+        const d1StorageMB = (stats.d1.database_size_bytes / (1024 * 1024)).toFixed(2);
+        const d1QuotaPercent = ((stats.d1.database_size_bytes / stats.d1.storage_free_limit_bytes) * 100).toFixed(3);
+
+        container.innerHTML = \`
+          <!-- CARD 1: Workers AI Neurons -->
+          <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-xl flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-sm font-bold">🧠</div>
+                  <div>
+                    <h3 class="font-bold text-zinc-100 text-sm">Workers AI Neurons</h3>
+                    <div class="text-[10px] text-zinc-500 font-mono">\${stats.ai.model}</div>
+                  </div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono">1024d</span>
+              </div>
+
+              <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800/80 space-y-2">
+                <div class="text-[11px] text-zinc-400">Total Neurons Consumed</div>
+                <div class="text-2xl font-bold font-mono text-emerald-400">\${stats.ai.neurons_used_estimated} <span class="text-xs font-normal text-zinc-500">neurons</span></div>
+                
+                <div class="pt-2 space-y-1">
+                  <div class="flex justify-between text-[10px] text-zinc-400">
+                    <span>Daily Free Quota: \${stats.ai.neurons_daily_free_limit.toLocaleString()} / day</span>
+                    <span>\${neuronPercent}% used</span>
+                  </div>
+                  <div class="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
+                    <div class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: \${Math.max(1, Math.min(100, neuronPercent))}%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="space-y-1.5 text-xs">
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Estimated Tokens Processed:</span>
+                  <span class="font-mono text-zinc-200 font-semibold">\${stats.ai.total_tokens_estimated.toLocaleString()} tokens</span>
+                </div>
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Pricing Formula:</span>
+                  <span class="font-mono text-zinc-300">1,075 N / 1M tokens</span>
+                </div>
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Est. Cloudflare Cost:</span>
+                  <span class="font-mono text-emerald-400 font-semibold">\$\${stats.ai.estimated_cost_usd}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-[10px] text-zinc-500 pt-3 border-t border-zinc-800/80">
+              Cloudflare includes 10,000 free Neurons every single day (~9.3M embedding tokens/day).
+            </div>
+          </div>
+
+          <!-- CARD 2: Cloudflare D1 Database -->
+          <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-xl flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-sm font-bold">🗄️</div>
+                  <div>
+                    <h3 class="font-bold text-zinc-100 text-sm">Cloudflare D1 SQL</h3>
+                    <div class="text-[10px] text-zinc-500 font-mono">\${stats.d1.database_name}</div>
+                  </div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-800 font-mono">SQLite + FTS5</span>
+              </div>
+
+              <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800/80 space-y-2">
+                <div class="text-[11px] text-zinc-400">Database Size</div>
+                <div class="text-2xl font-bold font-mono text-indigo-400">\${stats.d1.database_size_formatted} <span class="text-xs font-normal text-zinc-500">(\${stats.d1.database_size_bytes.toLocaleString()} bytes)</span></div>
+                
+                <div class="pt-2 space-y-1">
+                  <div class="flex justify-between text-[10px] text-zinc-400">
+                    <span>Free Tier Limit: 5.0 GB</span>
+                    <span>\${d1QuotaPercent}% used</span>
+                  </div>
+                  <div class="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
+                    <div class="bg-indigo-500 h-full rounded-full transition-all duration-500" style="width: \${Math.max(1, Math.min(100, d1QuotaPercent))}%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="space-y-1.5 text-xs">
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Documented Features:</span>
+                  <span class="font-mono text-zinc-200 font-semibold">\${stats.d1.total_features} rows</span>
+                </div>
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Indexed Chunks:</span>
+                  <span class="font-mono text-zinc-200 font-semibold">\${stats.d1.total_chunks} rows</span>
+                </div>
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>FTS5 Search Corpus:</span>
+                  <span class="font-mono text-zinc-200 font-semibold">\${stats.d1.total_fts_entries} entries</span>
+                </div>
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Active Projects:</span>
+                  <span class="font-mono text-zinc-200 font-semibold">\${stats.d1.total_projects} projects</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-[10px] text-zinc-500 pt-3 border-t border-zinc-800/80">
+              Cloudflare D1 includes 5M read queries/day and 5 GB storage free.
+            </div>
+          </div>
+
+          <!-- CARD 3: Cloudflare Vectorize V2 -->
+          <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-xl flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-sm font-bold">🎯</div>
+                  <div>
+                    <h3 class="font-bold text-zinc-100 text-sm">Vectorize Index</h3>
+                    <div class="text-[10px] text-zinc-500 font-mono">\${stats.vectorize.index_name}</div>
+                  </div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono">v2</span>
+              </div>
+
+              <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800/80 space-y-2">
+                <div class="text-[11px] text-zinc-400">Total Vectors Stored</div>
+                <div class="text-2xl font-bold font-mono text-cyan-400">\${stats.vectorize.vector_count} <span class="text-xs font-normal text-zinc-500">dense vectors</span></div>
+                
+                <div class="pt-2 space-y-1">
+                  <div class="flex justify-between text-[10px] text-zinc-400">
+                    <span>Index Dimensions: \${stats.vectorize.dimensions}d</span>
+                    <span class="uppercase font-mono text-emerald-400">\${stats.vectorize.metric}</span>
+                  </div>
+                  <div class="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
+                    <div class="bg-cyan-500 h-full rounded-full" style="width: 2%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="space-y-1.5 text-xs">
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Vector Dimension Size:</span>
+                  <span class="font-mono text-zinc-200 font-semibold">\${stats.vectorize.dimensions} dimensions</span>
+                </div>
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Distance Metric:</span>
+                  <span class="font-mono text-zinc-200 capitalize font-semibold">\${stats.vectorize.metric}</span>
+                </div>
+                <div class="flex justify-between text-zinc-400 text-[11px]">
+                  <span>Metadata Indexes:</span>
+                  <span class="font-mono text-zinc-200 font-semibold">project, type, library, importance</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-[10px] text-zinc-500 pt-3 border-t border-zinc-800/80">
+              Cloudflare Vectorize includes 5M dimension queries and storage free per month.
+            </div>
+          </div>
+        \`;
+
+        if (showFeedback) showToast("Live infrastructure stats updated!", "📊");
+      } catch (err) {
+        container.innerHTML = '<div class="col-span-full py-12 text-center text-red-400 text-xs">Failed to load stats: ' + err.message + '</div>';
+      }
     }
 
     // --- Hybrid Search Playground ---
