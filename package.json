@@ -1,0 +1,23 @@
+{
+  "name": "lekh-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "types": "wrangler types",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "e2e": "bun run scripts/e2e.ts",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "agents": "^0.31.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.154.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lekh-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lekh-db",
+      "database_id": "4a5e877f-6abb-4d76-926c-34472a540174"
+    }
+  ],
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "lekh-vectors"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  }
+}

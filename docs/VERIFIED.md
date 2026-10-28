@@ -1,0 +1,29 @@
+# Verified Specifications & Signatures
+
+This document tracks all external APIs, CLI commands, and response shapes verified against live official documentation, schemas, and live runtimes.
+
+| Component/API | Source URL or CLI command | Date Checked | Exact Signature / Observed JSON Shape |
+|---|---|---|---|
+| Bun runtime & package manager | `bun --version` | 2026-10-28 | `1.4.2` |
+| Node.js | `node --version` | 2026-10-28 | `v26.7.0` |
+| Git | `git --version` | 2026-10-28 | `2.48.1` |
+| Cloudflare Wrangler CLI | `bunx wrangler --version` | 2026-10-28 | `4.154.0` |
+| Wrangler Authentication | `bunx wrangler whoami` | 2026-10-28 | Unauthenticated (`You are not authenticated. Please run wrangler login.`) |
+| Stateless MCP Handler | `https://developers.cloudflare.com/agents/model-context-protocol/apis/handler-api/index.md` | 2026-10-28 | `createMcpHandler(factory: McpServerFactory, options?: CreateMcpHandlerOptions): StatelessMcpHandler;` Export from `"agents/mcp/server"`. Factory takes `(context?: McpRequestContext) => McpServer \| Promise<McpServer>`. Tool registration: `server.registerTool(name, { description, inputSchema: z.object({...}) }, handler)`. |
+| MCP SDK & Peer Dependency | `https://developers.cloudflare.com/agents/model-context-protocol/apis/handler-api/index.md` & `node_modules/agents/package.json` | 2026-10-28 | `agents@0.31.0` requires `@modelcontextprotocol/server@2.3.1` in `peerDependencies`. Installed cleanly. |
+| Wrangler Types Generation | `bunx wrangler types` | 2026-10-28 | Generates runtime environment & binding types into `worker-configuration.d.ts`. Typecheck `tsc --noEmit` exits 0. |
+| Workers AI Qwen3 Embedding Model Info | `https://developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b/index.md` | 2026-10-28 | Model ID: `@cf/qwen/qwen3-embedding-0.6b`. Context window: `8,192` tokens. Unit pricing: `$0.0118 per M input tokens`. |
+| Workers AI Qwen3 Embedding Input Schema | `https://developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b/schema-input.json` | 2026-10-28 | `queries: string \| string[]` (maxItems: 32); `instruction: string` (default: "Given a web search query, retrieve relevant passages that answer the query"); `documents: string \| string[]` (maxItems: 32); `text: string \| string[]` (alias for `documents`, maxItems: 32). |
+| Workers AI Qwen3 Embedding Output Schema | `https://developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b/schema-output.json` | 2026-10-28 | `{"data": number[][], "shape": number[]}`. |
+| Workers AI Qwen3 Embedding Live Runtime Shape | Live Worker `env.AI.run("@cf/qwen/qwen3-embedding-0.6b", ...)` | 2026-10-28 | Observed keys: `["data", "shape", "usage"]`. Verified `shape: [batch_size, 1024]`, `data: number[][]` with exact dimension `D = 1024` for both `documents: string[]` and `queries: string[]` + `instruction: string`. |
+| Vectorize Platform Limits (V2) | `https://developers.cloudflare.com/vectorize/platform/limits/index.md` | 2026-10-28 | Max dimensions per vector: `1536` (float32). Max vector ID length: `64 bytes`. Metadata per vector: `10 KiB`. Max `topK` with metadata/values: `50` (`100` without). Max upsert batch size: `1000` (Workers) / `5000` (HTTP API). Max metadata indexes per index: `10` (max indexed data per metadata index per vector: `64 bytes`). |
+| Vectorize Metadata Indexing Prerequisite | `https://developers.cloudflare.com/vectorize/reference/metadata-filtering/` | 2026-10-28 | Metadata indexes must be created before vectors are inserted; otherwise unindexed vectors are not matched by filters until re-upserted. |
+| Vectorize Index Creation | `bunx wrangler vectorize create lekh-vectors --dimensions=1024 --metric=cosine` | 2026-10-28 | Successfully created Vectorize index `lekh-vectors` (dimensions: 1024, metric: cosine). |
+| Vectorize Metadata Indexing | `bunx wrangler vectorize create-metadata-index` & `list-metadata-index` | 2026-10-28 | Note CLI command is `list-metadata-index` (singular). Created 4 indexes: `project` (String), `type` (String), `library` (String), `importance` (Number). |
+| Vectorize Live Runtime Mutation Shape | Live Worker `env.VECTORIZE.upsert(...)` and `env.VECTORIZE.deleteByIds(...)` | 2026-10-28 | Observed shape: `{"mutationId": string}`. Both upsert and delete operations return asynchronous mutation identifiers. |
+| Vectorize Live Runtime Query Shape | Live Worker `env.VECTORIZE.query(vector, { topK, returnMetadata: "all", filter })` | 2026-10-28 | Observed shape: `{"count": number, "matches": [{"id": string, "score": number, "metadata": object}]}`. Verified with cosine score `~1.0` and metadata filter `{ project: "test-project" }`. |
+| Bearer Authentication Timing Protection | `node:crypto` `timingSafeEqual` with `nodejs_compat` | 2026-10-28 | `timingSafeEqual` from `node:crypto` operates on equal-length `Uint8Array` buffers. Both user token and secret are hashed via SHA-256 into 32-byte buffers before comparison. |
+| Cloudflare D1 Database Provisioning | `bunx wrangler d1 create lekh-db` | 2026-10-28 | Successfully created DB `lekh-db` with id `4a5e877f-6abb-4d76-926c-34472a540174` in region APAC. |
+| Cloudflare D1 Local Migration & Tables | `bunx wrangler d1 migrations apply lekh-db --local` | 2026-10-28 | Applied `0001_init.sql` cleanly. Tables verified: `features`, `chunks`, `chunks_fts` (and FTS5 internal shadow tables). |
+| Cloudflare D1 Remote Migration & Tables | `bunx wrangler d1 migrations apply lekh-db --remote` | 2026-10-28 | Applied `0001_init.sql` to remote database. Tables verified on remote D1: `features`, `chunks`, `chunks_fts` (and FTS5 shadow tables). |
+| Production Cloudflare Worker Deploy | `bunx wrangler deploy` | 2026-10-28 | Deployed to `https://lekh-mcp.detox.workers.dev`. Smoke tests verified: `GET /health` (200), unauthenticated `POST /mcp` (401 with `WWW-Authenticate: Bearer`), `GET /` UI Dashboard (200 HTML), and authenticated `POST /mcp` `tools/list` (returns all 6 tools). |
