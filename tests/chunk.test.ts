@@ -81,6 +81,60 @@ describe("chunkFeature", () => {
     expect(chunks[2].text.startsWith("lekh-web | auth-guard | gotchas\n")).toBe(true);
     expect(chunks[2].text).toContain("Remember to handle token expiration gracefully.");
   });
+
+  it("rolls up nested children into consolidated nested-updates chunks and deduplicates files/tags into Chunk 0", () => {
+    const inputWithChildren: FeatureInput = {
+      ...sampleInput,
+      files: ["src/auth/Guard.tsx"],
+      tags: ["auth"],
+      children: [
+        {
+          name: "token-refresh-fix",
+          type: "fix",
+          importance: 2,
+          summary: "Fixes silent 401 when refresh token expires during navigation.",
+          sections: [
+            {
+              title: "details",
+              content: "Dispatched an auth:logout event when refresh returns 401.",
+            },
+          ],
+          files: ["src/auth/refresh.ts", "src/auth/Guard.tsx"],
+          tags: ["auth", "token-refresh"],
+          updated_at: "2026-10-28T00:00:00.000Z",
+        },
+        {
+          name: "session-timeout-pattern",
+          type: "pattern",
+          importance: 1,
+          summary: "Pattern for tracking inactivity timeouts.",
+          sections: [],
+          files: ["src/auth/inactivity.ts"],
+          tags: ["security"],
+          updated_at: "2026-10-28T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const chunks = chunkFeature(inputWithChildren);
+    // Chunk 0 (summary), Chunk 1 (architecture), Chunk 2 (gotchas), Chunk 3 (nested-updates)
+    expect(chunks.length).toBe(4);
+
+    // Chunk 0 should have deduplicated merged files & tags
+    const chunk0 = chunks[0];
+    expect(chunk0.text).toContain("Files: src/auth/Guard.tsx, src/auth/refresh.ts, src/auth/inactivity.ts");
+    expect(chunk0.text).toContain("Tags: auth, token-refresh, security");
+
+    // Chunk 3 should be nested-updates section
+    const chunk3 = chunks[3];
+    expect(chunk3.idx).toBe(3);
+    expect(chunk3.section).toBe("nested-updates");
+    expect(chunk3.text).toContain("lekh-web | auth-guard | nested-updates");
+    expect(chunk3.text).toContain("[fix] token-refresh-fix: Fixes silent 401");
+    expect(chunk3.text).toContain("[pattern] session-timeout-pattern: Pattern for tracking inactivity timeouts.");
+    expect(chunk3.text).toContain("Files: src/auth/refresh.ts, src/auth/Guard.tsx");
+    expect(chunk3.text).toContain("Files: src/auth/inactivity.ts");
+  });
 });
 
 describe("computeContentHash", () => {
@@ -116,5 +170,26 @@ describe("computeContentHash", () => {
     });
 
     expect(hash1).not.toBe(hash2);
+  });
+
+  it("changes hash when nested children are added or updated", async () => {
+    const hashWithoutChildren = await computeContentHash(baseInput);
+    const hashWithChild = await computeContentHash({
+      ...baseInput,
+      children: [
+        {
+          name: "sub-fix",
+          type: "fix",
+          importance: 2,
+          summary: "Fixed a bug",
+          sections: [],
+          files: [],
+          tags: [],
+          updated_at: "2026-10-28T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(hashWithoutChildren).not.toBe(hashWithChild);
   });
 });

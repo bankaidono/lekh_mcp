@@ -22,7 +22,7 @@ export function createServer(env: Env): McpServer {
     "save_feature",
     {
       description:
-        "Save or update feature architecture documentation, patterns, or decisions. Idempotent upsert keyed on (project, name).",
+        "Save or update feature architecture documentation, patterns, or decisions. Pass parent_name when documenting a bug fix, refactor, pattern, decision, or incremental sub-feature to nest it inside its parent feature and prevent vector bloat.",
       inputSchema: z.object({
         project: z
           .string()
@@ -32,6 +32,12 @@ export function createServer(env: Env): McpServer {
         name: z
           .string()
           .describe("Feature slug in lowercase-kebab (e.g. 'dropdown-menu', 'jwt-auth-middleware')"),
+        parent_name: z
+          .string()
+          .optional()
+          .describe(
+            "Optional parent feature slug (e.g. 'feature-memory-server', 'web-explorer-ui'). ALWAYS provide parent_name when saving a bug fix, refactor, pattern, decision, or incremental sub-feature that belongs to an existing feature so it nests inside the parent and avoids vector bloat."
+          ),
         summary: z
           .string()
           .min(10)
@@ -349,9 +355,18 @@ export function createServer(env: Env): McpServer {
       argsSchema: z.object({
         project: z.string().describe("Working directory name (e.g. 'lekh')"),
         name: z.string().describe("Feature slug in lowercase-kebab (e.g. 'jwt-auth-middleware')"),
+        parent_name: z
+          .string()
+          .optional()
+          .describe(
+            "Optional parent feature slug if documenting a bug fix, pattern, decision, or incremental sub-feature (e.g. 'feature-memory-server')"
+          ),
       }),
     },
-    async ({ project, name }) => {
+    async ({ project, name, parent_name }) => {
+      const parentLine = parent_name
+        ? `- parent_name: "${parent_name}" (nests update under parent feature)`
+        : `- parent_name: (optional, provide if this is a fix/pattern/decision/sub-feature for an existing feature)`;
       return {
         messages: [
           {
@@ -361,6 +376,7 @@ export function createServer(env: Env): McpServer {
               text: `Please inspect the recent changes or implementation for '${name}' in project '${project}'. Then, call the 'save_feature' tool with:
 - project: "${project}"
 - name: "${name}"
+${parentLine}
 - type: "feature" | "pattern" | "decision" | "fix" | "refactor"
 - importance: 1 (minor), 2 (standard), or 3 (critical architecture)
 - library: any wrapped third-party library

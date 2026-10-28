@@ -15,6 +15,7 @@ Add this snippet to your repository rules (`CLAUDE.md`, `.cursorrules`, `GEMINI.
   - Call `save_feature` once:
     - `project`: **The name of the current working directory** (e.g., basename of CWD like `"lekh"`, `"shop-app"`). Automatically normalized to lowercase-kebab.
     - `name`: short feature/component slug in `lowercase-kebab` (e.g., `"dropdown-menu"`, `"jwt-auth-middleware"`).
+    - `parent_name`: **Required when logging a bug fix (`fix`), refactor (`refactor`), pattern, decision, or sub-enhancement to an existing feature** (e.g., `"feature-memory-server"`, `"web-explorer-ui"`). Nests the update inside the parent feature and rolls its vectors into the parent to prevent vector bloat. Omit only for brand-new top-level subsystems.
     - `type`: `"feature" | "pattern" | "decision" | "fix" | "refactor"`.
     - `importance`: `1` (low), `2` (normal), or `3` (high/critical architecture).
     - `library`: primary third-party library wrapped or used, if applicable.
@@ -23,6 +24,7 @@ Add this snippet to your repository rules (`CLAUDE.md`, `.cursorrules`, `GEMINI.
     - `files`: array of key repository-relative file paths touched.
     - `tags`: lowercase tags for cross-cutting concerns (e.g., `["auth", "security", "middleware"]`).
 - Calling `save_feature` again with the same `(project, name)` safely updates the existing record without duplicating vectors.
+- Passing `parent_name` automatically deletes any previous standalone top-level feature of that name, nests it under the parent in D1, and rolls it into at most 1–2 consolidated `nested-updates` vector chunks on the parent.
 
 ---
 

@@ -5,6 +5,7 @@ import {
   type FeatureInput,
   type FeatureSection,
   type FeatureType,
+  type NestedChildEntry,
 } from "./chunk";
 import { embedDocuments, embedQuery, rerankContexts } from "./embed";
 import {
@@ -19,6 +20,8 @@ export interface SaveFeatureParams {
   name: string;
   summary: string;
   sections: FeatureSection[];
+  parent_name?: string;
+  children?: NestedChildEntry[];
   type?: FeatureType;
   importance?: number;
   library?: string;
@@ -32,6 +35,8 @@ export interface SaveFeatureResult {
   project: string;
   name: string;
   chunks: number;
+  nested_under?: string;
+  child_name?: string;
 }
 
 export interface SearchParams {
@@ -72,6 +77,7 @@ export interface FeatureRecord {
   library: string | null;
   summary: string;
   sections: FeatureSection[];
+  children: NestedChildEntry[];
   files: string[];
   tags: string[];
   chunk_count: number;
@@ -197,6 +203,200 @@ export async function saveFeature(
   const tags = (params.tags ?? []).map((t) => normalizeName(t)).filter(Boolean);
   const files = (params.files ?? []).map((f) => f.trim()).filter(Boolean);
 
+  const parentName = params.parent_name ? normalizeName(params.parent_name) : undefined;
+
+  // Path A: Nested Child Feature (parent_name provided and distinct from child name)
+  if (parentName && parentName !== name) {
+    const parent = await env.DB.prepare(
+      "SELECT * FROM features WHERE project = ? AND name = ?"
+    )
+      .bind(project, parentName)
+      .first<any>();
+
+    if (!parent) {
+      throw new Error(
+        `Parent feature '${parentName}' not found in project '${project}'. Call list_features first or omit parent_name to create a top-level feature.`
+      );
+    }
+
+    let existingChildren: NestedChildEntry[] = [];
+    let parentSections: FeatureSection[] = [];
+    let parentFiles: string[] = [];
+    let parentTags: string[] = [];
+
+    try {
+      existingChildren = JSON.parse(parent.children_json || "[]");
+    } catch {}
+    try {
+      parentSections = JSON.parse(parent.sections_json || "[]");
+    } catch {}
+    try {
+      parentFiles = JSON.parse(parent.files_json || "[]");
+    } catch {}
+    try {
+      parentTags = JSON.parse(parent.tags_json || "[]");
+    } catch {}
+
+    const childEntry: NestedChildEntry = {
+      name,
+      type,
+      importance,
+      library,
+      summary: params.summary.trim(),
+      sections: params.sections,
+      files,
+      tags,
+      updated_at: new Date().toISOString(),
+    };
+
+    const childIdx = existingChildren.findIndex((c) => c.name === name);
+    if (childIdx >= 0) {
+      existingChildren[childIdx] = childEntry;
+    } else {
+      existingChildren.push(childEntry);
+    }
+
+    const mergedFiles = Array.from(new Set([...parentFiles, ...files]));
+    const mergedTags = Array.from(new Set([...parentTags, ...tags]));
+
+    // If a standalone top-level feature previously existed for this child, remove it
+    const standalone = await env.DB.prepare(
+      "SELECT id FROM features WHERE project = ? AND name = ?"
+    )
+      .bind(project, name)
+      .first<{ id: number }>();
+
+    if (standalone) {
+      await deleteFeature(env, project, name);
+    }
+
+    const parentInput: FeatureInput = {
+      project,
+      name: parent.name,
+      type: parent.type,
+      importance: parent.importance,
+      library: parent.library,
+      summary: parent.summary,
+      sections: parentSections,
+      children: existingChildren,
+      files: mergedFiles,
+      tags: mergedTags,
+    };
+
+    const parentContentHash = await computeContentHash(parentInput);
+    const parentChunks = chunkFeature(parentInput);
+    const parentChunkTexts = parentChunks.map((c) => c.text);
+
+    // Embed all chunk texts BEFORE mutating D1
+    const parentVectors = await embedDocuments(env, parentChunkTexts);
+    const oldChunkCount = parent.chunk_count;
+
+    await env.DB.prepare(
+      `UPDATE features SET
+        sections_json = ?,
+        children_json = ?,
+        files_json = ?,
+        tags_json = ?,
+        content_hash = ?,
+        chunk_count = ?,
+        indexed_at = NULL,
+        updated_at = datetime('now')
+      WHERE id = ?`
+    )
+      .bind(
+        JSON.stringify(parentSections),
+        JSON.stringify(existingChildren),
+        JSON.stringify(mergedFiles),
+        JSON.stringify(mergedTags),
+        parentContentHash,
+        parentChunks.length,
+        parent.id
+      )
+      .run();
+
+    const batchStatements: D1PreparedStatement[] = [
+      env.DB.prepare("DELETE FROM chunks WHERE feature_id = ?").bind(parent.id),
+      env.DB.prepare("DELETE FROM chunks_fts WHERE feature_id = ?").bind(parent.id),
+    ];
+
+    for (const c of parentChunks) {
+      const vectorId = `f${parent.id}-c${c.idx}`;
+      batchStatements.push(
+        env.DB.prepare(
+          "INSERT INTO chunks (feature_id, project, idx, section, text, vector_id) VALUES (?, ?, ?, ?, ?, ?)"
+        ).bind(parent.id, project, c.idx, c.section, c.text, vectorId)
+      );
+      batchStatements.push(
+        env.DB.prepare(
+          "INSERT INTO chunks_fts (vector_id, feature_id, project, section, text) VALUES (?, ?, ?, ?, ?)"
+        ).bind(vectorId, parent.id, project, c.section, c.text)
+      );
+    }
+
+    await env.DB.batch(batchStatements);
+
+    const vectorizePayload = parentChunks.map((c, i) => ({
+      id: `f${parent.id}-c${c.idx}`,
+      values: parentVectors[i],
+      metadata: {
+        feature_id: parent.id,
+        project,
+        type: parent.type,
+        library: parent.library ?? "",
+        importance: parent.importance,
+        section: c.section,
+      },
+    }));
+
+    await env.VECTORIZE.upsert(vectorizePayload);
+
+    if (oldChunkCount > parentChunks.length) {
+      const staleIds: string[] = [];
+      for (let idx = parentChunks.length; idx < oldChunkCount; idx++) {
+        staleIds.push(`f${parent.id}-c${idx}`);
+      }
+      await env.VECTORIZE.deleteByIds(staleIds);
+    }
+
+    await env.DB.prepare(
+      "UPDATE features SET indexed_at = datetime('now'), chunk_count = ? WHERE id = ?"
+    )
+      .bind(parentChunks.length, parent.id)
+      .run();
+
+    return {
+      status: "updated",
+      feature_id: parent.id,
+      project,
+      name: parent.name,
+      nested_under: parent.name,
+      child_name: name,
+      chunks: parentChunks.length,
+    };
+  }
+
+  // Path B: Standard Top-Level Feature
+  const existing = await env.DB.prepare(
+    "SELECT id, content_hash, chunk_count, indexed_at, children_json FROM features WHERE project = ? AND name = ?"
+  )
+    .bind(project, name)
+    .first<{
+      id: number;
+      content_hash: string;
+      chunk_count: number;
+      indexed_at: string | null;
+      children_json: string;
+    }>();
+
+  let children: NestedChildEntry[] = [];
+  if (params.children && Array.isArray(params.children)) {
+    children = params.children;
+  } else if (existing && existing.children_json) {
+    try {
+      children = JSON.parse(existing.children_json);
+    } catch {}
+  }
+
   const normalizedInput: FeatureInput = {
     project,
     name,
@@ -205,23 +405,12 @@ export async function saveFeature(
     library,
     summary: params.summary.trim(),
     sections: params.sections,
+    children,
     files,
     tags,
   };
 
   const contentHash = await computeContentHash(normalizedInput);
-
-  // Check if existing record exists in D1
-  const existing = await env.DB.prepare(
-    "SELECT id, content_hash, chunk_count, indexed_at FROM features WHERE project = ? AND name = ?"
-  )
-    .bind(project, name)
-    .first<{
-      id: number;
-      content_hash: string;
-      chunk_count: number;
-      indexed_at: string | null;
-    }>();
 
   if (
     existing &&
@@ -260,6 +449,7 @@ export async function saveFeature(
         library = ?,
         summary = ?,
         sections_json = ?,
+        children_json = ?,
         files_json = ?,
         tags_json = ?,
         content_hash = ?,
@@ -274,6 +464,7 @@ export async function saveFeature(
         library,
         normalizedInput.summary,
         JSON.stringify(normalizedInput.sections),
+        JSON.stringify(children),
         JSON.stringify(files),
         JSON.stringify(tags),
         contentHash,
@@ -285,9 +476,9 @@ export async function saveFeature(
     const insertRes = await env.DB.prepare(
       `INSERT INTO features (
         project, name, type, importance, library, summary,
-        sections_json, files_json, tags_json, content_hash,
+        sections_json, children_json, files_json, tags_json, content_hash,
         chunk_count, indexed_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))`
     )
       .bind(
         project,
@@ -297,6 +488,7 @@ export async function saveFeature(
         library,
         normalizedInput.summary,
         JSON.stringify(normalizedInput.sections),
+        JSON.stringify(children),
         JSON.stringify(files),
         JSON.stringify(tags),
         contentHash,
@@ -726,6 +918,7 @@ export async function getFeature(
     library: row.library,
     summary: row.summary,
     sections: JSON.parse(row.sections_json || "[]"),
+    children: JSON.parse(row.children_json || "[]"),
     files: JSON.parse(row.files_json || "[]"),
     tags: JSON.parse(row.tags_json || "[]"),
     chunk_count: row.chunk_count,
@@ -746,7 +939,7 @@ export async function listFeatures(
   }
 ): Promise<Array<Omit<FeatureRecord, "sections">>> {
   const limit = Math.max(1, Math.min(200, params.limit ?? 50));
-  let sql = `SELECT id, project, name, type, importance, library, summary, files_json, tags_json, chunk_count, indexed_at, created_at, updated_at
+  let sql = `SELECT id, project, name, type, importance, library, summary, children_json, files_json, tags_json, chunk_count, indexed_at, created_at, updated_at
              FROM features`;
   const conditions: string[] = [];
   const binds: any[] = [];
@@ -777,6 +970,7 @@ export async function listFeatures(
     importance: row.importance,
     library: row.library,
     summary: row.summary,
+    children: JSON.parse(row.children_json || "[]"),
     files: JSON.parse(row.files_json || "[]"),
     tags: JSON.parse(row.tags_json || "[]"),
     chunk_count: row.chunk_count,
@@ -961,6 +1155,7 @@ export async function getOverviewGraph(env: Env): Promise<{
   stats: {
     total_projects: number;
     total_features: number;
+    total_children?: number;
     total_chunks: number;
     total_tags: number;
     total_files: number;
@@ -1003,6 +1198,7 @@ export async function getOverviewGraph(env: Env): Promise<{
       importance: f.importance,
       library: f.library,
       summary: f.summary,
+      children_count: (f.children || []).length,
     });
 
     // Link Project -> Feature
@@ -1011,6 +1207,28 @@ export async function getOverviewGraph(env: Env): Promise<{
       target: featNodeId,
       type: "has_feature",
     });
+
+    // Add child nodes & links
+    for (const child of f.children || []) {
+      const childNodeId = `child:${f.id}:${child.name}`;
+      nodes.push({
+        id: childNodeId,
+        name: child.name,
+        project: f.project,
+        parent_id: f.id,
+        parent_name: f.name,
+        type: "child",
+        sub_type: child.type,
+        importance: child.importance,
+        library: child.library,
+        summary: child.summary,
+      });
+      links.push({
+        source: featNodeId,
+        target: childNodeId,
+        type: "has_child",
+      });
+    }
 
     // Collect tags & files
     for (const tag of f.tags) {
@@ -1081,6 +1299,7 @@ export async function getOverviewGraph(env: Env): Promise<{
     stats: {
       total_projects: projectsData.length,
       total_features: featuresData.length,
+      total_children: featuresData.reduce((acc, f) => acc + (f.children ? f.children.length : 0), 0),
       total_chunks: featuresData.reduce((acc, f) => acc + f.chunk_count, 0),
       total_tags: tagSet.size,
       total_files: fileSet.size,
@@ -1325,15 +1544,19 @@ export interface ExportBundle {
 
 export async function exportAllFeatures(env: Env): Promise<ExportBundle> {
   const { results } = await env.DB.prepare(
-    "SELECT project, name, type, importance, library, summary, sections_json, files_json, tags_json FROM features ORDER BY project ASC, name ASC"
+    "SELECT project, name, type, importance, library, summary, sections_json, children_json, files_json, tags_json FROM features ORDER BY project ASC, name ASC"
   ).all<any>();
 
   const features: SaveFeatureParams[] = (results || []).map((row) => {
     let sections: FeatureSection[] = [];
+    let children: NestedChildEntry[] = [];
     let files: string[] = [];
     let tags: string[] = [];
     try {
       sections = JSON.parse(row.sections_json || "[]");
+    } catch {}
+    try {
+      children = JSON.parse(row.children_json || "[]");
     } catch {}
     try {
       files = JSON.parse(row.files_json || "[]");
@@ -1350,6 +1573,7 @@ export async function exportAllFeatures(env: Env): Promise<ExportBundle> {
       library: row.library,
       summary: row.summary,
       sections,
+      children,
       files,
       tags,
     };

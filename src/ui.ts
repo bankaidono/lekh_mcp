@@ -442,6 +442,11 @@ export function renderDashboardHtml(): string {
           </div>
         </div>
 
+        <div class="space-y-1">
+          <label class="text-[11px] font-medium text-zinc-300">Parent Feature Slug (Optional — nests under existing feature to prevent vector bloat)</label>
+          <input type="text" id="modal-feat-parent" placeholder="e.g. feature-memory-server (leave empty for top-level feature)" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500">
+        </div>
+
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="space-y-1">
             <label class="text-[11px] font-medium text-zinc-300">Type</label>
@@ -522,14 +527,16 @@ export function renderDashboardHtml(): string {
     let currentEditingFeature = null;
 
     // --- Create / Edit Feature Modal Functions ---
-    function openCreateFeatureModal() {
+    function openCreateFeatureModal(prefillProject = '', prefillParent = '') {
       currentEditingFeature = null;
-      document.getElementById('modal-feat-title').textContent = 'Create New Feature';
-      document.getElementById('modal-feat-project').value = '';
-      document.getElementById('modal-feat-project').disabled = false;
+      document.getElementById('modal-feat-title').textContent = prefillParent ? ('Add Nested Update to ' + prefillParent) : 'Create New Feature';
+      document.getElementById('modal-feat-project').value = prefillProject || '';
+      document.getElementById('modal-feat-project').disabled = Boolean(prefillProject);
       document.getElementById('modal-feat-name').value = '';
       document.getElementById('modal-feat-name').disabled = false;
-      document.getElementById('modal-feat-type').value = 'feature';
+      document.getElementById('modal-feat-parent').value = prefillParent || '';
+      document.getElementById('modal-feat-parent').disabled = Boolean(prefillParent);
+      document.getElementById('modal-feat-type').value = prefillParent ? 'fix' : 'feature';
       document.getElementById('modal-feat-importance').value = '2';
       document.getElementById('modal-feat-library').value = '';
       document.getElementById('modal-feat-summary').value = '';
@@ -539,9 +546,13 @@ export function renderDashboardHtml(): string {
 
       const sectionsContainer = document.getElementById('modal-feat-sections');
       sectionsContainer.innerHTML = '';
-      addModalSectionRow('overview', '');
-      addModalSectionRow('architecture', '');
-      addModalSectionRow('gotchas', '');
+      if (prefillParent) {
+        addModalSectionRow('details', '');
+      } else {
+        addModalSectionRow('overview', '');
+        addModalSectionRow('architecture', '');
+        addModalSectionRow('gotchas', '');
+      }
 
       document.getElementById('feature-modal').classList.remove('hidden');
     }
@@ -553,6 +564,8 @@ export function renderDashboardHtml(): string {
       document.getElementById('modal-feat-project').disabled = true;
       document.getElementById('modal-feat-name').value = feat.name;
       document.getElementById('modal-feat-name').disabled = true;
+      document.getElementById('modal-feat-parent').value = '';
+      document.getElementById('modal-feat-parent').disabled = true;
       document.getElementById('modal-feat-type').value = feat.type || 'feature';
       document.getElementById('modal-feat-importance').value = String(feat.importance || 2);
       document.getElementById('modal-feat-library').value = feat.library || '';
@@ -596,6 +609,7 @@ export function renderDashboardHtml(): string {
 
       const project = document.getElementById('modal-feat-project').value.trim();
       const name = document.getElementById('modal-feat-name').value.trim();
+      const parent_name = document.getElementById('modal-feat-parent').value.trim() || undefined;
       const type = document.getElementById('modal-feat-type').value;
       const importance = parseInt(document.getElementById('modal-feat-importance').value, 10) || 2;
       const library = document.getElementById('modal-feat-library').value.trim() || undefined;
@@ -634,7 +648,7 @@ export function renderDashboardHtml(): string {
       btn.textContent = 'Saving...';
 
       try {
-        const payload = { project, name, type, importance, library, summary, sections, files, tags };
+        const payload = { project, name, parent_name, type, importance, library, summary, sections, files, tags };
         await apiFetch('/api/feature', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -642,10 +656,17 @@ export function renderDashboardHtml(): string {
         });
 
         closeFeatureModal();
-        showToast("Feature '" + name + "' saved successfully!", '✅');
+        if (parent_name) {
+          showToast("Nested update '" + name + "' added under " + parent_name + "!", '✅');
+        } else {
+          showToast("Feature '" + name + "' saved successfully!", '✅');
+        }
         await refreshData(true);
-        if (currentDrawerFeature && currentDrawerFeature.project === project && currentDrawerFeature.name === name) {
-          openDrawer(project, name);
+        if (currentDrawerFeature && currentDrawerFeature.project === project) {
+          const targetDrawer = parent_name || name;
+          if (currentDrawerFeature.name === targetDrawer) {
+            openDrawer(project, targetDrawer);
+          }
         }
       } catch (err) {
         errBox.textContent = 'Save failed: ' + (err.message || String(err));
@@ -654,6 +675,7 @@ export function renderDashboardHtml(): string {
         btn.disabled = false;
         btn.textContent = 'Save Feature';
       }
+    }
     }
 
     // --- 1-Click JSON Backup Export & Import ---
@@ -1143,6 +1165,24 @@ export function renderDashboardHtml(): string {
         const filesHtml = (f.files || []).slice(0, 2).map(file => '<div class="text-[11px] text-zinc-400 font-mono truncate">📄 ' + file + '</div>').join('');
         const moreFiles = (f.files || []).length > 2 ? \`<div class="text-[10px] text-zinc-500 font-mono pl-1">+ \${f.files.length - 2} more files</div>\` : '';
 
+        const children = f.children || [];
+        const childrenBadges = children.map(c => \`
+          <span class="text-[10px] px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-zinc-300 font-mono inline-flex items-center space-x-1" title="\${c.summary.replace(/"/g, '&quot;')}">
+            <span>\${c.type === 'fix' ? '🔧' : c.type === 'pattern' ? '🧩' : c.type === 'decision' ? '⚖️' : c.type === 'refactor' ? '♻️' : '✨'}</span>
+            <span>\${c.name}</span>
+          </span>
+        \`).join(' ');
+
+        const nestedUpdatesHtml = children.length > 0 ? \`
+          <div class="pt-2 border-t border-zinc-800/60 space-y-1">
+            <div class="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+              <span class="text-indigo-400 font-semibold">Nested Updates</span>
+              <span class="px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-400 border border-indigo-900/50">Nested: \${children.length}</span>
+            </div>
+            <div class="flex flex-wrap gap-1 max-h-16 overflow-hidden">\${childrenBadges}</div>
+          </div>
+        \` : '';
+
         card.innerHTML = \`
           <div class="flex items-center justify-between gap-2">
             <span class="text-xs font-mono font-medium text-indigo-400 truncate">📁 \${f.project}</span>
@@ -1160,6 +1200,7 @@ export function renderDashboardHtml(): string {
           <h3 class="text-sm sm:text-base font-bold text-zinc-100 hover:text-emerald-400 transition tracking-tight truncate">\${f.name}</h3>
           <p class="text-xs text-zinc-300 line-clamp-2 leading-relaxed">\${f.summary}</p>
           <div class="space-y-1">\${filesHtml}\${moreFiles}</div>
+          \${nestedUpdatesHtml}
           <div class="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-[11px]">
             <div class="flex flex-wrap gap-1">\${tagsHtml}</div>
             <span class="text-zinc-500 font-mono text-[10px] sm:text-xs shrink-0 pl-2">\${f.chunk_count} chunks</span>
@@ -1236,16 +1277,19 @@ export function renderDashboardHtml(): string {
         .on("click", (event, d) => {
           if (d.type === 'feature') {
             openDrawer(d.project, d.name);
+          } else if (d.type === 'child') {
+            openDrawer(d.project, d.parent_name || d.name);
           } else if (d.type === 'project') {
             selectProjectAndShowFeatures(d.name);
           }
         });
 
       node.append("circle")
-        .attr("r", d => d.type === 'project' ? (isMobile ? 12 : 14) : d.type === 'feature' ? (isMobile ? 8 : 10) : d.type === 'tag' ? (isMobile ? 5 : 6) : 4)
+        .attr("r", d => d.type === 'project' ? (isMobile ? 12 : 14) : d.type === 'feature' ? (isMobile ? 8 : 10) : d.type === 'child' ? (isMobile ? 6 : 7) : d.type === 'tag' ? (isMobile ? 5 : 6) : 4)
         .attr("fill", d => {
           if (d.type === 'project') return '#6366f1';
           if (d.type === 'feature') return '#10b981';
+          if (d.type === 'child') return '#38bdf8';
           if (d.type === 'tag') return '#a855f7';
           return '#f59e0b';
         })
@@ -1307,6 +1351,45 @@ export function renderDashboardHtml(): string {
             <div class="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed break-words font-sans">\${s.content}</div>
           </div>
         \`).join('');
+
+        const children = feat.children || [];
+        const childrenSectionHtml = children.length > 0 ? \`
+          <div class="space-y-2.5 pt-3 border-t border-zinc-800">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] uppercase font-mono text-cyan-400 font-bold">Nested Updates & Fixes (\${children.length})</span>
+              <span class="text-[10px] text-zinc-500 font-mono">Consolidated Vectors</span>
+            </div>
+            <div class="space-y-2">
+              \${children.map(c => \`
+                <div class="bg-zinc-950/90 border border-zinc-800/90 p-3 rounded-xl space-y-2 text-xs">
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center space-x-1.5">
+                      <span class="text-[10px] px-1.5 py-0.2 rounded font-mono uppercase font-semibold \${
+                        c.type === 'fix' ? 'bg-amber-950/80 text-amber-400 border border-amber-900/60' :
+                        c.type === 'pattern' ? 'bg-indigo-950/80 text-indigo-400 border border-indigo-900/60' :
+                        c.type === 'decision' ? 'bg-purple-950/80 text-purple-400 border border-purple-900/60' :
+                        'bg-emerald-950/80 text-emerald-400 border border-emerald-900/60'
+                      }">[\${c.type}]</span>
+                      <span class="font-bold text-zinc-100 font-mono">\${c.name}</span>
+                    </div>
+                    <span class="text-[10px] text-zinc-500 font-mono">\${(c.updated_at || '').slice(0, 10)}</span>
+                  </div>
+                  <p class="text-zinc-300 text-[11px] leading-relaxed">\${c.summary}</p>
+                  \${(c.sections && c.sections.length > 0) ? \`
+                    <div class="space-y-1 pt-1 border-t border-zinc-900">
+                      \${c.sections.map(cs => \`
+                        <div class="text-[11px] text-zinc-400 font-mono"><strong class="text-zinc-300 font-semibold">\${cs.title}:</strong> \${cs.content}</div>
+                      \`).join('')}
+                    </div>
+                  \` : ''}
+                  \${(c.files && c.files.length > 0) ? \`
+                    <div class="text-[10px] text-zinc-500 font-mono truncate">Files: \${c.files.join(', ')}</div>
+                  \` : ''}
+                </div>
+              \`).join('')}
+            </div>
+          </div>
+        \` : '';
 
         const related = feat.related_features || [];
         const relatedHtml = related.length > 0 ? \`
@@ -1372,6 +1455,8 @@ export function renderDashboardHtml(): string {
               \${sectionsHtml}
             </div>
 
+            \${childrenSectionHtml}
+
             \${relatedHtml}
 
             <div class="space-y-2.5 pt-3 border-t border-zinc-800">
@@ -1383,11 +1468,14 @@ export function renderDashboardHtml(): string {
             </div>
 
             <div class="pt-4 border-t border-zinc-800 flex items-center space-x-2">
-              <button type="button" onclick="editCurrentDrawerFeature()" class="flex-1 py-2.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-100 font-medium text-xs transition flex items-center justify-center space-x-2 shadow-sm">
-                <span>✏️</span><span>Edit Feature</span>
+              <button type="button" onclick="openCreateFeatureModal('\${feat.project}', '\${feat.name}')" class="flex-1 py-2.5 rounded-xl border border-emerald-700/60 bg-emerald-950/40 hover:bg-emerald-900/60 active:bg-emerald-800 text-emerald-300 font-medium text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                <span>+</span><span>Add Nested Update</span>
               </button>
-              <button type="button" onclick="promptDeleteFeature('\${feat.project}', '\${feat.name}')" class="py-2.5 px-4 rounded-xl border border-red-900/60 bg-red-950/40 hover:bg-red-900/60 active:bg-red-900 text-red-300 font-medium text-xs transition flex items-center justify-center space-x-2">
-                <span>🗑️</span><span>Delete</span>
+              <button type="button" onclick="editCurrentDrawerFeature()" class="py-2.5 px-3 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-100 font-medium text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                <span>✏️</span><span class="hidden sm:inline">Edit</span>
+              </button>
+              <button type="button" onclick="promptDeleteFeature('\${feat.project}', '\${feat.name}')" class="py-2.5 px-3 rounded-xl border border-red-900/60 bg-red-950/40 hover:bg-red-900/60 active:bg-red-900 text-red-300 font-medium text-xs transition flex items-center justify-center space-x-1.5">
+                <span>🗑️</span>
               </button>
             </div>
           </div>
